@@ -1,7 +1,7 @@
 """
 코스피200 정배열 대시보드 데이터 생성 스크립트
 
-실행:  python scripts/update_kospi200.py          # 실제 데이터 (pykrx)
+실행:  python scripts/update_kospi200.py          # 실제 데이터 (네이버 금융)
        python scripts/update_kospi200.py --demo   # 가짜 데이터로 화면 미리보기
 
 결과:  data/kospi200/YYYY-MM-DD.json  (기준일별 결과)
@@ -15,6 +15,7 @@
 
 import argparse
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -37,66 +38,92 @@ SNAPSHOT_DAYS = 20                # 기준일 선택 목록에 남길 최근 거
 
 
 # ---------------------------------------------------------------- 데이터 수집
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
+
+
+def _get(url, encoding=None):
+    import requests
+    for attempt in range(3):
+        try:
+            r = requests.get(url, headers=UA, timeout=15)
+            r.raise_for_status()
+            if encoding:
+                r.encoding = encoding
+            return r.text
+        except Exception as e:
+            print(f"  재시도 {attempt + 1}: {url} ({e})")
+            time.sleep(2)
+    raise RuntimeError(f"접속 실패: {url}")
+
+
+def _strip(html):
+    return re.sub(r"<[^>]+>", "", html).replace("&nbsp;", " ").strip()
+
+
+def parse_constituents(html):
+    """네이버 코스피200 편입종목 페이지 → [(코드, 종목명, 시가총액(원))]"""
+    out = []
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S):
+        m = re.search(r'code=(\d{6})[^>]*>([^<]+)</a>', row)
+        if not m:
+            continue
+        cells = [_strip(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
+        nums = [c.replace(",", "") for c in cells if re.fullmatch(r"[\d,]+", c)]
+        cap = int(nums[-1]) * 100_000_000 if nums else 0   # 마지막 숫자 열 = 시가총액(억)
+        out.append((m.group(1), m.group(2).strip(), cap))
+    return out
+
+
+def parse_chart(xml):
+    """네이버 차트 XML → pd.Series(종가, index=날짜)"""
+    rows = re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|', xml)
+    if not rows:
+        return pd.Series(dtype=float)
+    s = pd.Series({pd.Timestamp(d): float(c) for d, c in rows})
+    return s.sort_index()
+
+
+def parse_sector(html):
+    m = re.search(r'type=upjong&(?:amp;)?no=\d+"[^>]*>([^<]+)</a>', html)
+    return m.group(1).strip() if m else "-"
+
+
 def fetch_real():
-    """pykrx로 코스피200 구성종목과 일별 종가를 가져온다.
-    pykrx 1.2.x부터 KRX 로그인이 필요: 환경변수 KRX_ID, KRX_PW."""
-    import os
-    if not (os.getenv("KRX_ID") and os.getenv("KRX_PW")):
-        raise RuntimeError("KRX_ID / KRX_PW 환경변수가 없습니다. GitHub Secrets 등록을 확인하세요.")
-    from pykrx import stock
+    """네이버 금융에서 코스피200 구성종목·일별 종가·업종을 가져온다 (로그인 불필요)."""
+    # 1) 구성종목 (페이지당 10종목, 약 20페이지)
+    stocks, seen = [], set()
+    for page in range(1, 31):
+        html = _get(f"https://finance.naver.com/sise/entryJongmok.naver?code=KPI200&page={page}", "euc-kr")
+        rows = [r for r in parse_constituents(html) if r[0] not in seen]
+        if not rows:
+            break
+        for r in rows:
+            seen.add(r[0])
+        stocks += rows
+        time.sleep(0.2)
+    if len(stocks) < 150:
+        raise RuntimeError(f"구성종목 수가 비정상입니다: {len(stocks)}")
+    print(f"구성종목 {len(stocks)}개")
 
-    today = datetime.now(KST).strftime("%Y%m%d")
-    start = (datetime.now(KST) - timedelta(days=int(HISTORY_DAYS * 1.6))).strftime("%Y%m%d")
+    # 2) 종목별 일봉 종가 + 업종
+    closes, info = {}, {}
+    for i, (code, name, cap) in enumerate(stocks, 1):
+        xml = _get(f"https://fchart.stock.naver.com/sise.nhn?symbol={code}"
+                   f"&timeframe=day&count={HISTORY_DAYS}&requestType=0", "euc-kr")
+        closes[code] = parse_chart(xml)
+        try:
+            sector = parse_sector(_get(f"https://finance.naver.com/item/main.naver?code={code}", "euc-kr"))
+        except Exception:
+            sector = "-"
+        info[code] = {"name": name, "sector": sector, "cap": cap}
+        if i % 20 == 0:
+            print(f"  수집 {i}/{len(stocks)}")
+        time.sleep(0.15)
 
-    # 1) 거래일 목록 (코스피200 지수 일봉의 날짜 = 거래일)
-    idx = stock.get_index_ohlcv(start, today, "1028")
-    days = [d.strftime("%Y%m%d") for d in idx.index][-HISTORY_DAYS:]
-    if not days:
-        raise RuntimeError("거래일 목록을 가져오지 못했습니다.")
-    last = days[-1]
-
-    # 2) 구성종목
-    tickers = list(stock.get_index_portfolio_deposit_file("1028", last))
-    if len(tickers) < 150:
-        raise RuntimeError(f"구성종목 수가 비정상입니다: {len(tickers)}")
-    print(f"구성종목 {len(tickers)}개, 거래일 {len(days)}일 ({days[0]}~{last})")
-
-    # 3) 날짜별 전 종목 종가 (종목별 200회 대신 날짜별 1회씩 호출해 빠르게)
-    closes = {}
-    for i, d in enumerate(days, 1):
-        for attempt in range(3):
-            try:
-                df = stock.get_market_ohlcv(d, market="KOSPI")
-                closes[d] = df["종가"]
-                break
-            except Exception as e:  # 일시적 오류는 재시도
-                print(f"  {d} 재시도 {attempt + 1}: {e}")
-                time.sleep(2)
-        if i % 50 == 0:
-            print(f"  시세 수집 {i}/{len(days)}")
-        time.sleep(0.2)  # 서버 부담 줄이기
-    price = pd.DataFrame(closes).T
-    price.index = pd.to_datetime(price.index)
-    price = price.reindex(columns=tickers).replace(0, np.nan)
-
-    # 4) 종목명·시가총액
-    cap = stock.get_market_cap(last, market="KOSPI")["시가총액"]
-    names = {t: stock.get_market_ticker_name(t) for t in tickers}
-
-    # 5) 섹터 (FinanceDataReader의 업종 정보, 실패해도 계속 진행)
-    sectors = {}
-    try:
-        import FinanceDataReader as fdr
-        desc = fdr.StockListing("KRX-DESC").set_index("Code")
-        sectors = desc["Sector"].dropna().to_dict()
-    except Exception as e:
-        print(f"섹터 정보 생략: {e}")
-
-    info = {
-        t: {"name": names.get(t, t), "sector": sectors.get(t, "-") or "-",
-            "cap": int(cap.get(t, 0) or 0)}
-        for t in tickers
-    }
+    price = pd.DataFrame(closes).sort_index().tail(HISTORY_DAYS)
+    price = price.replace(0, np.nan)
+    print(f"거래일 {len(price)}일 ({price.index[0]:%Y-%m-%d}~{price.index[-1]:%Y-%m-%d})")
     return price, info
 
 
