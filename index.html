@@ -87,7 +87,7 @@ const fmtCap = v => {
   const jo = v / 1e12;
   return jo >= 1 ? jo.toFixed(1) + '조' : Math.round(v / 1e8).toLocaleString() + '억';
 };
-const fnguide = code => `https://wcomp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A${code}`;
+const fnguide = code => `https://cdn.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A${code}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 async function getJSON(path) {
