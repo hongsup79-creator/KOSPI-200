@@ -1,4 +1,4 @@
-pykrx
-finance-datareader
 pandas
 numpy
+requests
+yfinance
