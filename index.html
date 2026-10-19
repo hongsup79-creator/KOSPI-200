@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코스피200 정배열</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e8eaed;
+    --muted: #8b919c; --accent: #4f8cff; --green: #3ecf8e; --green-bg: #1e3a2c;
+    --red: #ff7a7a; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  header { padding: 24px 16px 16px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  .demo { background: #3a2d12; color: #f5c66b; border-radius: 10px; padding: 10px 14px;
+          font-size: 13px; margin-bottom: 14px; }
+  .controls { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+              padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .controls label { color: var(--muted); font-size: 14px; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
+           border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 15px; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { background: transparent; color: var(--muted); border: 1px solid var(--line);
+                border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .note { width: 100%; color: var(--muted); font-size: 12px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+            padding: 16px; margin-top: 16px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .sec-head h2 { margin: 0; font-size: 20px; }
+  .rule { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+  .count { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .changes { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
+             margin: 12px 0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .changes .out { color: var(--red); font-weight: 600; }
+  .changes .in { color: var(--green); font-weight: 600; }
+  .changes span.tag { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px;
+       padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  a.name { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  a.name:hover { color: var(--accent); }
+  .badge { display: inline-block; margin-left: 6px; background: var(--green-bg); color: var(--green);
+           font-size: 11px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; }
+  .sector { color: var(--muted); }
+  .group td { background: #15181d; color: var(--accent); font-weight: 600; font-size: 13px; }
+  .empty { color: var(--muted); padding: 16px 0; text-align: center; }
+  @media (max-width: 520px) { .sector-col { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>코스피200 정배열</h1>
+  <div class="sub" id="updated">불러오는 중…</div>
+</header>
+<main>
+  <div class="demo" id="demo" hidden>데모 데이터입니다. GitHub Actions가 한 번 실행되면 실제 시세로 바뀝니다.</div>
+  <div class="controls">
+    <label for="date">기준일</label>
+    <select id="date"></select>
+    <div class="seg" id="sort">
+      <button data-sort="days" class="on">연속일순</button>
+      <button data-sort="cap">시가총액순</button>
+      <button data-sort="sector">섹터별 묶기</button>
+    </div>
+    <div class="note" id="universe"></div>
+  </div>
+  <div id="sections"></div>
+</main>
+
+<script>
+const DATA = 'data/kospi200/';
+let current = null, sortKey = 'days';
+
+const fmtCap = v => {
+  if (!v) return '-';
+  const jo = v / 1e12;
+  return jo >= 1 ? jo.toFixed(1) + '조' : Math.round(v / 1e8).toLocaleString() + '억';
+};
+const fnguide = code => `https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A${code}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function getJSON(path) {
+  const r = await fetch(path + '?t=' + Date.now());  // 캐시 방지
+  if (!r.ok) throw new Error(path);
+  return r.json();
+}
+
+function row(it) {
+  return `<tr>
+    <td><a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}</td>
+    <td class="sector sector-col">${esc(it.sector)}</td>
+    <td class="num">${it.days}일</td>
+    <td class="num">${fmtCap(it.cap)}</td></tr>`;
+}
+
+function renderSection(s, idx) {
+  let items = [...s.items];
+  let body;
+  if (sortKey === 'cap') items.sort((a, b) => b.cap - a.cap);
+  if (sortKey === 'sector') {
+    const groups = {};
+    items.forEach(it => (groups[it.sector] ??= []).push(it));
+    body = Object.entries(groups)
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'ko'))
+      .map(([g, arr]) => `<tr class="group"><td colspan="4">${esc(g)} · ${arr.length}</td></tr>` +
+        arr.sort((a, b) => b.days - a.days).map(row).join('')).join('');
+  } else {
+    body = items.map(row).join('');
+  }
+
+  const added = s.items.filter(it => it.days === 1);
+  const chips = [];
+  if (added.length) chips.push(`<span class="in">신규 편입 ${added.length}</span> ${added.map(a => esc(a.name)).join(', ')}`);
+  if (s.dropped.length) chips.push(`<span class="out">편출 ${s.dropped.length}</span> ${s.dropped.map(d => `${esc(d.name)} <span class="tag">${d.days}일 유지</span>`).join(', ')}`);
+
+  return `<section>
+    <div class="sec-head">
+      <h2>${idx + 1}. ${esc(s.title)}</h2>
+      <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
+      <span class="count">${s.items.length}종목</span>
+    </div>
+    ${chips.length ? `<div class="changes">${chips.map(c => `<div>${c}</div>`).join('')}</div>` : '<div style="height:12px"></div>'}
+    ${s.items.length ? `<table>
+      <thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">시가총액</th></tr></thead>
+      <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
+  </section>`;
+}
+
+function render() {
+  if (!current) return;
+  document.getElementById('universe').textContent =
+    `코스피200 구성 ${current.universe}종목 · 종목명 누르면 FnGuide 기업정보`;
+  document.getElementById('sections').innerHTML = current.sections.map(renderSection).join('');
+}
+
+async function loadDate(d) {
+  current = await getJSON(DATA + d + '.json');
+  render();
+}
+
+async function init() {
+  try {
+    const meta = await getJSON(DATA + 'dates.json');
+    const t = new Date(meta.updated);
+    document.getElementById('updated').textContent =
+      '마지막 업데이트 — ' + t.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    document.getElementById('demo').hidden = !meta.demo;
+    const sel = document.getElementById('date');
+    sel.innerHTML = meta.dates.map(d => `<option>${d}</option>`).join('');
+    sel.onchange = () => loadDate(sel.value);
+    await loadDate(meta.dates[0]);
+  } catch (e) {
+    document.getElementById('updated').textContent = '데이터를 불러오지 못했습니다. GitHub Actions 실행 여부를 확인하세요.';
+  }
+}
+
+document.getElementById('sort').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  sortKey = b.dataset.sort;
+  document.querySelectorAll('#sort button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+init();
+</script>
+</body>
+</html>
