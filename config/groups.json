@@ -1,0 +1,57 @@
+{
+  "_설명": "묶음과 종목을 자유롭게 고치세요. 국내는 6자리 종목코드, 미국은 티커(지수는 ^로 시작). 저장 후 다음 자동 갱신부터 반영됩니다.",
+  "kr": [
+    {"name": "레버리지/인버스", "items": [
+      {"code": "122630", "name": "KODEX 레버리지"},
+      {"code": "252670", "name": "KODEX 200선물인버스2X"},
+      {"code": "233740", "name": "KODEX 코스닥150레버리지"},
+      {"code": "251340", "name": "KODEX 코스닥150선물인버스"}
+    ]},
+    {"name": "대표지수", "items": [
+      {"code": "069500", "name": "KODEX 200"},
+      {"code": "229200", "name": "KODEX 코스닥150"},
+      {"code": "360750", "name": "TIGER 미국S&P500"},
+      {"code": "133690", "name": "TIGER 미국나스닥100"}
+    ]},
+    {"name": "업종", "items": [
+      {"code": "091160", "name": "KODEX 반도체"},
+      {"code": "305720", "name": "KODEX 2차전지산업"},
+      {"code": "091170", "name": "KODEX 은행"},
+      {"code": "244580", "name": "KODEX 바이오"}
+    ]},
+    {"name": "배당·채권", "items": [
+      {"code": "161510", "name": "PLUS 고배당주"},
+      {"code": "148070", "name": "KOSEF 국고채10년"},
+      {"code": "153130", "name": "KODEX 단기채권"}
+    ]}
+  ],
+  "us": [
+    {"name": "지수", "items": [
+      {"code": "^GSPC", "name": "S&P500"},
+      {"code": "^IXIC", "name": "나스닥 종합"},
+      {"code": "^NDX", "name": "나스닥100"},
+      {"code": "^DJI", "name": "다우존스"}
+    ]},
+    {"name": "대표 ETF", "items": [
+      {"code": "SPY", "name": "SPY"},
+      {"code": "QQQ", "name": "QQQ"},
+      {"code": "IWM", "name": "IWM (러셀2000)"},
+      {"code": "SMH", "name": "SMH (반도체)"}
+    ]},
+    {"name": "레버리지/인버스", "items": [
+      {"code": "TQQQ", "name": "TQQQ"},
+      {"code": "SQQQ", "name": "SQQQ"},
+      {"code": "SOXL", "name": "SOXL"},
+      {"code": "UPRO", "name": "UPRO"}
+    ]},
+    {"name": "빅테크", "items": [
+      {"code": "AAPL", "name": "애플"},
+      {"code": "MSFT", "name": "마이크로소프트"},
+      {"code": "NVDA", "name": "엔비디아"},
+      {"code": "AMZN", "name": "아마존"},
+      {"code": "GOOGL", "name": "알파벳"},
+      {"code": "META", "name": "메타"},
+      {"code": "TSLA", "name": "테슬라"}
+    ]}
+  ]
+}

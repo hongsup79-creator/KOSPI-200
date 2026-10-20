@@ -3,24 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>코스피200 정배열</title>
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<title>ETF Trend Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
   :root {
+    --bg: #f4f6f9; --panel: #ffffff; --line: #e2e6ec; --text: #1b1f24;
+    --muted: #6b7280; --accent: #2f6fec; --accent-text: #ffffff; --green: #0b8a55; --green-bg: #e2f5ea;
+    --red: #d6363b; --notice-bg: #fff4d6; --notice-text: #8a5a00; --group-bg: #f1f4f9;
+    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec;
+    --grid: rgba(0,0,0,0.07); --tip-bg: #ffffff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  :root[data-theme="dark"] {
     --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e8eaed;
     --muted: #8b919c; --accent: #4f8cff; --green: #3ecf8e; --green-bg: #1e3a2c;
-    --red: #ff7a7a; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --red: #ff7a7a; --notice-bg: #3a2d12; --notice-text: #f5c66b; --group-bg: #15181d;
+    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff;
+    --grid: rgba(255,255,255,0.06); --tip-bg: #0b0c0f;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; }
-  header { padding: 24px 16px 16px; border-bottom: 1px solid var(--line); }
+  header { padding: 24px 16px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: relative; }
+  #theme { position: absolute; top: 18px; right: 16px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  header h1, header .sub { padding-right: 96px; }
   h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
   .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
   main { max-width: 860px; margin: 0 auto; padding: 16px; }
-  .demo { background: #3a2d12; color: #f5c66b; border-radius: 10px; padding: 10px 14px;
-          font-size: 13px; margin-bottom: 14px; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 0 0 auto; background: var(--panel); color: var(--muted); border: 1px solid var(--line);
+                 border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+  .tabs button.on { color: var(--text); border-color: var(--accent); background: var(--tab-on); font-weight: 600; }
+  .notice { background: var(--notice-bg); color: var(--notice-text); border-radius: 10px; padding: 10px 14px;
+            font-size: 13px; margin-bottom: 14px; }
   .controls { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
               padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .controls label { color: var(--muted); font-size: 14px; }
@@ -29,7 +45,7 @@
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
   .seg button { background: transparent; color: var(--muted); border: 1px solid var(--line);
                 border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
-  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
   .note { width: 100%; color: var(--muted); font-size: 12px; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
             padding: 16px; margin-top: 16px; }
@@ -38,10 +54,10 @@
   .rule { font-family: var(--mono); color: var(--muted); font-size: 13px; }
   .count { margin-left: auto; color: var(--muted); font-size: 13px; }
   .changes { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
-             margin: 12px 0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+             margin: 12px 0; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
   .changes .out { color: var(--red); font-weight: 600; }
   .changes .in { color: var(--green); font-weight: 600; }
-  .changes span.tag { color: var(--muted); }
+  .tag { color: var(--muted); }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px;
        padding: 8px 6px; border-bottom: 1px solid var(--line); }
@@ -53,49 +69,88 @@
   .badge { display: inline-block; margin-left: 6px; background: var(--green-bg); color: var(--green);
            font-size: 11px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; }
   .sector { color: var(--muted); }
-  .group td { background: #15181d; color: var(--accent); font-weight: 600; font-size: 13px; }
-  .empty { color: var(--muted); padding: 16px 0; text-align: center; }
-  @media (max-width: 520px) { .sector-col { display: none; } }
+  .group td { background: var(--group-bg); color: var(--accent); font-weight: 600; font-size: 13px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; line-height: 1.6; }
+  .heat { overflow-x: auto; }
+  .heat table { font-size: 13px; }
+  .heat td.c { text-align: center; font-variant-numeric: tabular-nums; padding: 8px 4px; min-width: 34px; }
+  .heat th.c { text-align: center; padding: 8px 4px; font-weight: 500; }
+  .heat td.sname { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .heat th:first-child, .heat td.sname { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  input.search { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 14px; flex: 1 1 140px; min-width: 0; }
+  .delta-up { color: var(--green); } .delta-dn { color: var(--red); }
+  .chart-box { position: relative; height: 260px; margin: 12px 0 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .legend i, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .ret-up { color: var(--up); } .ret-dn { color: var(--dn); }
+  .rt td, .rt th { padding: 8px 4px; font-size: 13px; }
+  .rt { margin-top: 8px; }
+  .rt td:first-child { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .rt .sw { margin-right: 6px; }
+  .rt-wrap { overflow-x: auto; }
+  @media (max-width: 520px) { .sector-col { display: none; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>코스피200 정배열</h1>
+  <button id="theme" type="button">어두운 화면</button>
+  <h1>ETF Trend Dashboard</h1>
   <div class="sub" id="updated">불러오는 중…</div>
 </header>
 <main>
-  <div class="demo" id="demo" hidden>데모 데이터입니다. GitHub Actions가 한 번 실행되면 실제 시세로 바뀝니다.</div>
-  <div class="controls">
-    <label for="date">기준일</label>
-    <select id="date"></select>
-    <div class="seg" id="sort">
-      <button data-sort="days" class="on">연속일순</button>
-      <button data-sort="cap">시가총액순</button>
-      <button data-sort="sector">섹터별 묶기</button>
-    </div>
-    <div class="note" id="universe"></div>
-  </div>
-  <div id="sections"></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="kr">국내 ETF</button>
+    <button data-tab="us">미국 주식/ETF</button>
+    <button data-tab="kospi200">코스피200 정배열</button>
+    <button data-tab="kosdaq150">코스닥150 정배열</button>
+    <button data-tab="sector">섹터 흐름</button>
+  </nav>
+  <div id="panel"></div>
 </main>
 
 <script>
-const DATA = 'data/kospi200/';
-let current = null, sortKey = 'days';
+const INDEX = {
+  kospi200: { name: '코스피200', dir: 'data/kospi200/' },
+  kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
+};
+const state = { tab: 'kospi200', sort: 'days', q: '', date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const PALETTE = {
+  light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
+  dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
+};
+let COLORS = PALETTE.light;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function applyTheme(t) {
+  if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  COLORS = PALETTE[t === 'dark' ? 'dark' : 'light'];
+  const b = document.getElementById('theme');
+  if (b) b.textContent = t === 'dark' ? '밝은 화면' : '어두운 화면';
+}
+let theme = 'light';
+try { theme = localStorage.getItem('theme') || 'light'; } catch {}
+applyTheme(theme);
+let charts = [];
 
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fnguide = code => `https://wcomp.fnguide.com/?cmp_cd=${code}`;
 const fmtCap = v => {
   if (!v) return '-';
   const jo = v / 1e12;
   return jo >= 1 ? jo.toFixed(1) + '조' : Math.round(v / 1e8).toLocaleString() + '억';
 };
-const fnguide = code => `https://wcomp.fnguide.com/?cmp_cd=${code}`;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtTime = iso => iso ? new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-';
 
 async function getJSON(path) {
-  const r = await fetch(path + '?t=' + Date.now());  // 캐시 방지
+  if (state.cache[path]) return state.cache[path];
+  const r = await fetch(path + '?t=' + Date.now());
   if (!r.ok) throw new Error(path);
-  return r.json();
+  return (state.cache[path] = await r.json());
 }
 
+const panel = () => document.getElementById('panel');
+
+// ---------------------------------------------------------- 정배열 탭
 function row(it) {
   return `<tr>
     <td><a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}</td>
@@ -105,75 +160,236 @@ function row(it) {
 }
 
 function renderSection(s, idx) {
-  let items = [...s.items];
-  let body;
-  if (sortKey === 'cap') items.sort((a, b) => b.cap - a.cap);
-  if (sortKey === 'sector') {
+  const q = state.q.trim().toLowerCase();
+  let items = s.items.filter(it => !q || it.name.toLowerCase().includes(q) || it.sector.toLowerCase().includes(q) || it.code.includes(q)), body;
+  if (state.sort === 'cap') items.sort((a, b) => b.cap - a.cap);
+  if (state.sort === 'sector') {
     const groups = {};
     items.forEach(it => (groups[it.sector] ??= []).push(it));
     body = Object.entries(groups)
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'ko'))
       .map(([g, arr]) => `<tr class="group"><td colspan="4">${esc(g)} · ${arr.length}</td></tr>` +
         arr.sort((a, b) => b.days - a.days).map(row).join('')).join('');
-  } else {
-    body = items.map(row).join('');
-  }
+  } else body = items.map(row).join('');
 
   const added = s.items.filter(it => it.days === 1);
   const chips = [];
-  if (added.length) chips.push(`<span class="in">신규 편입 ${added.length}</span> ${added.map(a => esc(a.name)).join(', ')}`);
-  if (s.dropped.length) chips.push(`<span class="out">편출 ${s.dropped.length}</span> ${s.dropped.map(d => `${esc(d.name)} <span class="tag">${d.days}일 유지</span>`).join(', ')}`);
+  if (added.length) chips.push(`<div><span class="in">신규 편입 ${added.length}</span> ${added.map(a => esc(a.name)).join(', ')}</div>`);
+  if (s.dropped.length) chips.push(`<div><span class="out">전일 대비 편출 ${s.dropped.length}</span> ${s.dropped.map(d => `${esc(d.name)} <span class="tag">${d.days}일 유지</span>`).join(', ')}</div>`);
 
   return `<section>
-    <div class="sec-head">
-      <h2>${idx + 1}. ${esc(s.title)}</h2>
+    <div class="sec-head"><h2>${idx + 1}. ${esc(s.title)}</h2>
       <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
-      <span class="count">${s.items.length}종목</span>
-    </div>
-    ${chips.length ? `<div class="changes">${chips.map(c => `<div>${c}</div>`).join('')}</div>` : '<div style="height:12px"></div>'}
-    ${s.items.length ? `<table>
-      <thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">시가총액</th></tr></thead>
+      <span class="count">${q ? items.length + ' / ' : ''}${s.items.length}종목</span></div>
+    ${chips.length ? `<div class="changes">${chips.join('')}</div>` : '<div style="height:12px"></div>'}
+    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">시가총액</th></tr></thead>
       <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
   </section>`;
 }
 
-function render() {
-  if (!current) return;
-  document.getElementById('universe').textContent =
-    `코스피200 구성 ${current.universe}종목 · 종목명 누르면 FnGuide 기업정보`;
-  document.getElementById('sections').innerHTML = current.sections.map(renderSection).join('');
+async function renderAlignment(ixId) {
+  const ix = INDEX[ixId];
+  let meta;
+  try { meta = await getJSON(ix.dir + 'dates.json'); }
+  catch { panel().innerHTML = `<div class="empty">${ix.name} 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>`; return; }
+  const date = state.date[ixId] || meta.dates[0];
+  const data = await getJSON(ix.dir + date + '.json');
+  if (state.tab !== ixId) return;
+
+  const notices = [];
+  if (meta.demo) notices.push('데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.');
+  if (meta.source === 'marketcap') notices.push(`공식 ${ix.name} 구성종목을 받지 못해 시가총액 상위 종목으로 대신 계산했습니다.`);
+
+  panel().innerHTML = `
+    ${notices.map(n => `<div class="notice">${n}</div>`).join('')}
+    <div class="controls">
+      <label for="date">기준일</label>
+      <select id="date">${meta.dates.map(d => `<option ${d === date ? 'selected' : ''}>${d}</option>`).join('')}</select>
+      <div class="seg" id="sort">
+        ${[['days','연속일순'],['cap','시가총액순'],['sector','섹터별 묶기']].map(([k, l]) =>
+          `<button data-sort="${k}" class="${state.sort === k ? 'on' : ''}">${l}</button>`).join('')}
+      </div>
+      <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
+      <div class="note">${ix.name} 구성 ${data.universe}종목 · 종목명 누르면 FnGuide 기업정보</div>
+    </div>
+    <div id="secs">${data.sections.map(renderSection).join('')}</div>`;
+
+  const qi = document.getElementById('q');
+  qi.oninput = e => {
+    state.q = e.target.value;
+    document.getElementById('secs').innerHTML = data.sections.map(renderSection).join('');
+  };
+  document.getElementById('date').onchange = e => { state.date[ixId] = e.target.value; render(); };
+  document.getElementById('sort').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.sort = b.dataset.sort; render();
+  };
 }
 
-async function loadDate(d) {
-  current = await getJSON(DATA + d + '.json');
-  render();
+// ---------------------------------------------------------- 섹터 흐름 탭
+async function renderSector() {
+  let all;
+  try { all = await getJSON('data/sectors.json'); }
+  catch { panel().innerHTML = '<div class="empty">섹터 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>'; return; }
+  if (state.tab !== 'sector') return;
+  const d = all[state.sectorIx];
+  if (!d) { panel().innerHTML = '<div class="empty">해당 지수 데이터가 없습니다.</div>'; return; }
+
+  const N = 10;
+  const dates = d.dates.slice(-N);
+  const flow = d.flow[state.sectorSec] || {};
+  const rows = Object.entries(flow).map(([name, arr]) => {
+    const a = arr.slice(-N);
+    return { name, a, last: a[a.length - 1], delta: a[a.length - 1] - a[Math.max(0, a.length - 6)], total: d.universe[name] || 0 };
+  }).filter(r => r.a.some(v => v > 0))
+    .sort((x, y) => y.last - x.last || y.delta - x.delta || x.name.localeCompare(y.name, 'ko'));
+  const max = Math.max(1, ...rows.flatMap(r => r.a));
+  const cell = v => {
+    const alpha = v ? 0.15 + 0.75 * v / max : 0;
+    return `<td class="c" style="background:rgba(${css('--heat')},${alpha.toFixed(2)})${alpha > 0.55 ? ';color:#fff' : ''}">${v || ''}</td>`;
+  };
+
+  panel().innerHTML = `
+    ${all.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
+    <div class="controls">
+      <div class="seg" id="sx">${Object.entries(INDEX).map(([k, v]) =>
+        `<button data-k="${k}" class="${state.sectorIx === k ? 'on' : ''}">${v.name}</button>`).join('')}</div>
+      <div class="seg" id="ss">${[['short','단기 정배열'],['mid','중기 정배열']].map(([k, l]) =>
+        `<button data-k="${k}" class="${state.sectorSec === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="note">섹터별 정배열 종목 수 (최근 ${dates.length}거래일) · 5일 변화 = 오늘 − 5거래일 전</div>
+    </div>
+    <section class="heat">
+      ${rows.length ? `<table>
+        <thead><tr><th>섹터</th>${dates.map(x => `<th class="c">${x.slice(5).replace('-', '/')}</th>`).join('')}<th class="num">5일 변화</th><th class="num">구성</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td class="sname" title="${esc(r.name)}">${esc(r.name)}</td>${r.a.map(cell).join('')}
+          <td class="num ${r.delta > 0 ? 'delta-up' : r.delta < 0 ? 'delta-dn' : ''}">${r.delta > 0 ? '+' : ''}${r.delta}</td>
+          <td class="num tag">${r.total}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">정배열 종목이 없습니다.</div>'}
+    </section>`;
+
+  document.getElementById('sx').onclick = e => { const b = e.target.closest('button'); if (b) { state.sectorIx = b.dataset.k; render(); } };
+  document.getElementById('ss').onclick = e => { const b = e.target.closest('button'); if (b) { state.sectorSec = b.dataset.k; render(); } };
 }
 
-async function init() {
+
+// ---------------------------------------------------------- 국내 ETF · 미국 추이 탭
+const RANGES = [['1m','1개월',21],['3m','3개월',63],['6m','6개월',126],['1y','1년',252],['all','전체',99999]];
+const RET = [['1일',1],['1주',5],['1개월',21],['3개월',63],['1년',252]];
+const linkFor = (market, code) => market === 'kr'
+  ? `https://m.stock.naver.com/domestic/stock/${code}/total`
+  : `https://finance.yahoo.com/quote/${encodeURIComponent(code)}`;
+const fmtPrice = (v, market) => v == null ? '-' :
+  (market === 'kr' ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+function ret(arr, n) {
+  const last = arr[arr.length - 1], base = arr[arr.length - 1 - n];
+  if (last == null || base == null || !base) return null;
+  return (last / base - 1) * 100;
+}
+const fmtRet = v => v == null ? '<span class="tag">-</span>' :
+  `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+
+async function renderTrend(market) {
+  let d;
+  try { d = await getJSON(`data/${market}_trend.json`); }
+  catch { panel().innerHTML = '<div class="empty">데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>'; return; }
+  if (state.tab !== market) return;
+  const n = RANGES.find(r => r[0] === state.range)[2];
+  const start = Math.max(0, d.dates.length - n);
+  const labels = d.dates.slice(start);
+
+  panel().innerHTML = `
+    ${d.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
+    <div class="controls">
+      <div class="seg" id="rg">${RANGES.map(([k, l]) => `<button data-k="${k}" class="${state.range === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="seg" id="md">${[['pct','변동률(%)'],['price','종가']].map(([k, l]) => `<button data-k="${k}" class="${state.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="note">${market === 'us' ? '미국은 한국 시간 기준 전날 밤 종가까지 반영 · ' : ''}변동률 = 기간 첫날을 100으로 놓은 값 · 묶음은 config/groups.json에서 수정</div>
+    </div>
+    ${d.groups.map((g, gi) => `<section>
+      <div class="sec-head"><h2>${esc(g.name)}</h2><span class="count">${g.series.length}개 종목</span></div>
+      <div class="chart-box"><canvas id="c${gi}"></canvas></div>
+      <div class="legend">${g.series.map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(s.name)}</span>`).join('')}</div>
+      <div class="rt-wrap"><table class="rt"><thead><tr><th>종목</th><th class="num">현재가</th>${RET.map(r => `<th class="num${r[1] === 252 ? ' y1' : ''}">${r[0]}</th>`).join('')}</tr></thead>
+        <tbody>${g.series.map((s, i) => {
+          const c = s.close, last = c[c.length - 1];
+          return `<tr><td><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><a class="name" href="${linkFor(market, s.code)}" target="_blank" rel="noopener">${esc(s.name)}</a></td>
+            <td class="num">${fmtPrice(last, market)}</td>${RET.map(r => `<td class="num${r[1] === 252 ? ' y1' : ''}">${fmtRet(ret(c, r[1]))}</td>`).join('')}</tr>`;
+        }).join('')}</tbody></table></div>
+    </section>`).join('')}`;
+
+  charts.forEach(c => c.destroy()); charts = [];
+  if (!window.Chart) return;
+  d.groups.forEach((g, gi) => {
+    const datasets = g.series.map((s, i) => {
+      const seg = s.close.slice(start);
+      const base = seg.find(v => v != null);
+      const data = state.mode === 'pct' ? seg.map(v => v == null || !base ? null : +(v / base * 100).toFixed(2)) : seg;
+      const col = COLORS[i % COLORS.length];
+      return { label: s.name, data, borderColor: col, backgroundColor: col, borderWidth: 2,
+               pointRadius: 0, pointHoverRadius: 4, tension: 0.15, spanGaps: true };
+    });
+    charts.push(new Chart(document.getElementById('c' + gi), {
+      type: 'line', data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'), borderColor: css('--line'), borderWidth: 1, padding: 10,
+            callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y == null ? '-' : c.parsed.y.toLocaleString()}` } } },
+        scales: {
+          x: { ticks: { color: css('--muted'), maxTicksLimit: 5, maxRotation: 0 }, grid: { color: css('--grid') } },
+          y: { ticks: { color: css('--muted') }, grid: { color: css('--grid') } } } } }));
+  });
+
+  document.getElementById('rg').onclick = e => { const b = e.target.closest('button'); if (b) { state.range = b.dataset.k; render(); } };
+  document.getElementById('md').onclick = e => { const b = e.target.closest('button'); if (b) { state.mode = b.dataset.k; render(); } };
+}
+
+// ---------------------------------------------------------- 준비 중 탭
+function renderSoon(title) {
+  panel().innerHTML = `<section><div class="empty"><b>${title}</b><br>다음 단계에서 추가됩니다.<br>묶음별 수익률 추이 차트 · 1개월/3개월/전체 · 변동률/종가 전환</div></section>`;
+}
+
+// ---------------------------------------------------------- 공통
+async function render() {
+  if (!['kr','us'].includes(state.tab)) { charts.forEach(c => c.destroy()); charts = []; }
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
   try {
-    const meta = await getJSON(DATA + 'dates.json');
-    const t = new Date(meta.updated);
-    document.getElementById('updated').textContent =
-      '마지막 업데이트 — ' + t.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-    document.getElementById('demo').hidden = !meta.demo;
-    const sel = document.getElementById('date');
-    sel.innerHTML = meta.dates.map(d => `<option>${d}</option>`).join('');
-    sel.onchange = () => loadDate(sel.value);
-    await loadDate(meta.dates[0]);
+    if (INDEX[state.tab]) await renderAlignment(state.tab);
+    else if (state.tab === 'sector') await renderSector();
+    else await renderTrend(state.tab);
   } catch (e) {
-    document.getElementById('updated').textContent = '데이터를 불러오지 못했습니다. GitHub Actions 실행 여부를 확인하세요.';
+    panel().innerHTML = '<div class="empty">데이터를 불러오지 못했습니다.</div>';
   }
 }
 
-document.getElementById('sort').addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  sortKey = b.dataset.sort;
-  document.querySelectorAll('#sort button').forEach(x => x.classList.toggle('on', x === b));
-  render();
-});
+async function header() {
+  const parts = [];
+  for (const [k, v] of Object.entries(INDEX)) {
+    try { const m = await getJSON(v.dir + 'dates.json'); parts.push(`${v.name} ${fmtTime(m.updated)}`); } catch {}
+  }
+  for (const [k, v] of [['us','미국'],['kr','국내 ETF']]) {
+    try { const m = await getJSON(`data/${k}_trend.json`); parts.unshift(`${v} ${fmtTime(m.updated)}`); } catch {}
+  }
+  document.getElementById('updated').textContent = parts.length ? '마지막 업데이트 — ' + parts.join(' / ') : '데이터 없음';
+}
 
-init();
+document.getElementById('tabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.tab = b.dataset.tab;
+  try { history.replaceState(null, '', '#' + state.tab); } catch {}
+  render();
+};
+
+document.getElementById('theme').onclick = () => {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('theme', theme); } catch {}
+  applyTheme(theme); render();
+};
+applyTheme(theme);
+const fromHash = location.hash.slice(1);
+if (document.querySelector(`#tabs button[data-tab="${fromHash}"]`)) state.tab = fromHash;
+header();
+render();
 </script>
 </body>
 </html>
