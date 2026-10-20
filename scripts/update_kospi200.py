@@ -456,11 +456,14 @@ def scorecard(price, sec_streak):
         entry.iloc[:130] = False
         row = {}
         for h in HORIZONS:
-            r = fwd[h][entry].stack()
-            if r.empty:
+            # NaN(아직 h일이 안 지난 신호 등)은 반드시 제외 — pandas 버전에 따라 stack()이 NaN을 남김
+            r = fwd[h].where(entry).to_numpy().ravel()
+            ex = fwd[h].sub(bench[h], axis=0).where(entry).to_numpy().ravel()
+            keep = ~np.isnan(r) & ~np.isnan(ex)
+            r, ex = r[keep], ex[keep]
+            if r.size == 0:
                 row[str(h)] = None
                 continue
-            ex = fwd[h][entry].sub(bench[h], axis=0).stack()
             row[str(h)] = {"n": int(r.size), "avg": _r(r.mean(), 2), "win": _r((r > 0).mean() * 100),
                            "excess": _r(ex.mean(), 2), "beat": _r((ex > 0).mean() * 100)}
         first = price.index[130] if len(price) > 130 else price.index[0]
