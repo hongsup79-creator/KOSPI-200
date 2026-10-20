@@ -45,7 +45,7 @@ SECTIONS = [
     {"id": "mid", "title": "중기 정배열", "mas": [20, 60, 120]},
 ]
 FULL_MAS = [5, 10, 20, 60, 120]
-HISTORY_DAYS = 300
+HISTORY_DAYS = 500   # 약 2년 (120일선 + 신호 성적표 검증 기간)
 SNAPSHOT_DAYS = 20
 
 INDEXES = [
@@ -290,24 +290,25 @@ def fetch_sectors():
 
 
 def naver_history(code, count):
-    """네이버 차트(fchart) 일봉 종가 → pd.Series (참고 대시보드와 같은 출처)"""
+    """네이버 차트(fchart) 일봉 → DataFrame[close, vol] (참고 대시보드와 같은 출처)"""
     url = (f"https://fchart.stock.naver.com/sise.nhn?symbol={code}"
            f"&timeframe=day&count={count}&requestType=0")
     r = _get(url, as_json=False)
     text = r.content.decode("euc-kr", errors="replace")
     rows = {}
-    for d, c in re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|', text):
-        rows[pd.Timestamp(d)] = float(c)
-    return pd.Series(rows, dtype=float).sort_index()
+    for d, c, v in re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|([\d.]*)', text):
+        rows[pd.Timestamp(d)] = (float(c), float(v) if v else np.nan)
+    df = pd.DataFrame.from_dict(rows, orient="index", columns=["close", "vol"])
+    return df.sort_index()
 
 
-def fetch_prices(codes, count=HISTORY_DAYS):
-    closes, failed = {}, []
+def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
+    closes, vols, failed = {}, {}, []
     for i, c in enumerate(codes, 1):
         try:
-            sr = naver_history(c, count)
-            if len(sr):
-                closes[c] = sr
+            df = naver_history(c, count)
+            if len(df):
+                closes[c], vols[c] = df["close"], df["vol"]
             else:
                 failed.append(c)
         except Exception:
@@ -317,25 +318,28 @@ def fetch_prices(codes, count=HISTORY_DAYS):
         time.sleep(0.08)
     if failed:
         print(f"  시세 실패 {len(failed)}개: {failed[:10]}")
-    price = pd.DataFrame(closes).sort_index()
-    return price.dropna(how="all").tail(count).replace(0, np.nan)
+    price = pd.DataFrame(closes).sort_index().dropna(how="all").tail(count).replace(0, np.nan)
+    if not with_volume:
+        return price
+    vol = pd.DataFrame(vols).reindex(index=price.index, columns=price.columns)
+    return price, vol
 
 
 def fetch_real(ix, sectors, caps=None):
     stocks, source = fetch_constituents(ix, caps)
     caps = caps or {}
     stocks = [(c, n, cap or caps.get(c, 0)) for c, n, cap in stocks]
-    price = fetch_prices([c for c, *_ in stocks])
+    price, vol = fetch_prices([c for c, *_ in stocks], with_volume=True)
     missing = [c for c, *_ in stocks if c not in price.columns or price[c].notna().sum() == 0]
     if missing:
         print(f"  시세 없음 {len(missing)}개 제외: {missing[:10]}")
     info = {c: {"name": n, "sector": sectors.get(c, "-"), "cap": cap}
             for c, n, cap in stocks if c not in missing}
-    price = price[list(info)]
+    price, vol = price[list(info)], vol[list(info)]
     if price.shape[1] < ix["min"] * 0.8:
         raise RuntimeError(f"시세를 받은 종목이 너무 적습니다: {price.shape[1]}개")
     print(f"  거래일 {len(price)}일 ({price.index[0]:%Y-%m-%d}~{price.index[-1]:%Y-%m-%d})")
-    return price, info, source
+    return price, vol, info, source
 
 
 def fetch_demo(ix, _sectors, _caps=None):
@@ -343,14 +347,15 @@ def fetch_demo(ix, _sectors, _caps=None):
     secs = ["반도체", "자동차", "화학", "은행", "바이오", "해운", "유틸리티", "인터넷", "2차전지", "소프트웨어"]
     n = 40 if ix["id"] == "kospi200" else 30
     days = pd.bdate_range(end=datetime.now(KST).date(), periods=HISTORY_DAYS)
-    price, info = {}, {}
+    price, vol, info = {}, {}, {}
     for i in range(n):
         code = f"{(i + 1) * 1371 % 999999:06d}"
         r = rng.normal(rng.normal(0.0004, 0.0012), 0.018, len(days))
         price[code] = 50000 * np.exp(np.cumsum(r))
+        vol[code] = rng.lognormal(12, 0.5, len(days))
         info[code] = {"name": f"{ix['name']} 샘플{i + 1}", "sector": secs[i % len(secs)],
                       "cap": int(rng.uniform(1e11, 4e14))}
-    return pd.DataFrame(price, index=days), info, "demo"
+    return pd.DataFrame(price, index=days), pd.DataFrame(vol, index=days), info, "demo"
 
 
 # ---------------------------------------------------------------- 계산
@@ -370,7 +375,51 @@ def aligned(ma, periods):
     return cond
 
 
-def build(ix, price, info, source, demo, updated):
+def _r(v, nd=1):
+    return None if v is None or pd.isna(v) else round(float(v), nd)
+
+
+BREADTH_DAYS = 120
+
+
+def breadth(price, sec_mask, full):
+    """시장 체온계: 날짜별 정배열 종목 비율(%)"""
+    valid = price.notna().sum(axis=1).replace(0, np.nan)
+    out = {"dates": [d.strftime("%Y-%m-%d") for d in price.index[-BREADTH_DAYS:]]}
+    for k, m in list(sec_mask.items()) + [("full", full)]:
+        pct = (m.sum(axis=1) / valid * 100).iloc[-BREADTH_DAYS:]
+        out[k] = [_r(v) for v in pct]
+    return out
+
+
+HORIZONS = [5, 10, 20]
+
+
+def scorecard(price, sec_streak):
+    """신호 성적표: 정배열에 새로 들어온 날 종가에 샀다고 가정한 이후 수익률"""
+    res = {}
+    fwd = {h: (price.shift(-h) / price - 1) * 100 for h in HORIZONS}
+    bench = {h: fwd[h].mean(axis=1) for h in HORIZONS}   # 같은 기간 구성종목 평균
+    for k, st in sec_streak.items():
+        entry = (st == 1)
+        # 이평선이 처음 계산되는 구간의 가짜 신호 제외 (최소 120일 이후만)
+        entry.iloc[:130] = False
+        row = {}
+        for h in HORIZONS:
+            r = fwd[h][entry].stack()
+            if r.empty:
+                row[str(h)] = None
+                continue
+            ex = fwd[h][entry].sub(bench[h], axis=0).stack()
+            row[str(h)] = {"n": int(r.size), "avg": _r(r.mean(), 2), "win": _r((r > 0).mean() * 100),
+                           "excess": _r(ex.mean(), 2), "beat": _r((ex > 0).mean() * 100)}
+        first = price.index[130] if len(price) > 130 else price.index[0]
+        row["from"] = first.strftime("%Y-%m-%d")
+        res[k] = row
+    return res
+
+
+def build(ix, price, vol, info, source, demo, updated):
     out_dir = DATA / ix["id"]
     all_p = sorted({p for s in SECTIONS for p in s["mas"]} | set(FULL_MAS))
     ma = {p: price.rolling(p, min_periods=p).mean() for p in all_p}
@@ -378,6 +427,15 @@ def build(ix, price, info, source, demo, updated):
     full = aligned(ma, [0] + FULL_MAS).fillna(False)
     sec_mask = {s["id"]: aligned(ma, s["mas"]).fillna(False) for s in SECTIONS}
     sec_streak = {k: streak(v) for k, v in sec_mask.items()}
+
+    # --- 과열(이격도)·품질 점수 재료
+    gap20 = (price / ma[20] - 1) * 100                              # 20일선 대비 이격도(%)
+    spread = (ma[5] / ma[20] - 1) * 100                             # 이평선 간격
+    slope20 = (ma[20] / ma[20].shift(5) - 1) * 100                  # 20일선 5일 기울기
+    volr = vol.rolling(5, min_periods=3).mean() / vol.rolling(20, min_periods=10).mean()  # 거래량 증가
+    hi52 = price / price.rolling(250, min_periods=120).max()        # 52주 고점 대비
+    parts = [spread, slope20, volr, hi52]
+    score = sum(p.rank(axis=1, pct=True) for p in parts) / len(parts) * 100
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dates = list(price.index[-SNAPSHOT_DAYS:])
@@ -389,7 +447,9 @@ def build(ix, price, info, source, demo, updated):
         for s in SECTIONS:
             m_today, st = sec_mask[s["id"]].loc[d], sec_streak[s["id"]].loc[d]
             m_prev, st_prev = sec_mask[s["id"]].loc[prev], sec_streak[s["id"]].loc[prev]
-            items = [{"code": t, **info[t], "days": int(st[t]), "full": bool(full.loc[d, t])}
+            items = [{"code": t, **info[t], "days": int(st[t]), "full": bool(full.loc[d, t]),
+                      "gap": _r(gap20.loc[d, t]), "score": _r(score.loc[d, t], 0),
+                      "volr": _r(volr.loc[d, t], 2)}
                      for t in m_today[m_today].index]
             dropped = [{"code": t, "name": info[t]["name"], "days": int(st_prev[t])}
                        for t in m_prev[m_prev & ~m_today].index]
@@ -406,7 +466,8 @@ def build(ix, price, info, source, demo, updated):
     for f in out_dir.glob("????-??-??.json"):
         if f.stem not in keep:
             f.unlink()
-    meta = {"dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source}
+    meta = {"dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
+            "breadth": breadth(price, sec_mask, full), "scorecard": scorecard(price, sec_streak)}
     (out_dir / "dates.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
 
     universe = {}
@@ -494,8 +555,8 @@ def main():
     for ix in INDEXES:
         print(f"[{ix['name']}]")
         try:
-            price, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps)
-            sector_out[ix["id"]] = build(ix, price, info, source, args.demo, updated)
+            price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps)
+            sector_out[ix["id"]] = build(ix, price, vol, info, source, args.demo, updated)
             ok += 1
         except Exception as e:
             warn(f"{ix['name']} 실패: {e}")

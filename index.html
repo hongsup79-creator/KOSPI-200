@@ -89,6 +89,23 @@
   .rt td:first-child { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .rt .sw { margin-right: 6px; }
   .rt-wrap { overflow-x: auto; }
+  .badge.hot { background: var(--notice-bg); color: var(--notice-text); }
+  .score { display: inline-block; min-width: 30px; text-align: center; padding: 2px 6px; border-radius: 6px;
+           font-variant-numeric: tabular-nums; font-size: 13px; }
+  .score.hi { background: var(--green-bg); color: var(--green); font-weight: 700; }
+  .score.mid { color: var(--text); } .score.lo { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .tile .k { color: var(--muted); font-size: 12px; }
+  .tile .v { font-size: 22px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .tile .d { font-size: 12px; margin-top: 2px; }
+  .mood { font-size: 14px; margin-top: 4px; }
+  .mini-chart { position: relative; height: 170px; }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary h2::after { content: ' ▾'; color: var(--muted); font-size: 14px; }
+  details[open] > summary h2::after { content: ' ▴'; }
+  .sc td, .sc th { padding: 7px 4px; font-size: 13px; }
   @media (max-width: 520px) { .sector-col { display: none; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
@@ -153,11 +170,15 @@ async function getJSON(path) {
 const panel = () => document.getElementById('panel');
 
 // ---------------------------------------------------------- 정배열 탭
+const OVERHEAT = 15;   // 20일선 대비 +15% 이상이면 과열 배지
+const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo';
 function row(it) {
+  const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
-    <td><a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}</td>
+    <td><a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
+    <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배">${it.score ?? '-'}</span></td>
     <td class="num">${fmtCap(it.cap)}</td></tr>`;
 }
 
@@ -165,12 +186,13 @@ function renderSection(s, idx) {
   const q = state.q.trim().toLowerCase();
   let items = s.items.filter(it => !q || it.name.toLowerCase().includes(q) || it.sector.toLowerCase().includes(q) || it.code.includes(q)), body;
   if (state.sort === 'cap') items.sort((a, b) => b.cap - a.cap);
+  if (state.sort === 'score') items.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   if (state.sort === 'sector') {
     const groups = {};
     items.forEach(it => (groups[it.sector] ??= []).push(it));
     body = Object.entries(groups)
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'ko'))
-      .map(([g, arr]) => `<tr class="group"><td colspan="4">${esc(g)} · ${arr.length}</td></tr>` +
+      .map(([g, arr]) => `<tr class="group"><td colspan="5">${esc(g)} · ${arr.length}</td></tr>` +
         arr.sort((a, b) => b.days - a.days).map(row).join('')).join('');
   } else body = items.map(row).join('');
 
@@ -184,9 +206,67 @@ function renderSection(s, idx) {
       <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
       <span class="count">${q ? items.length + ' / ' : ''}${s.items.length}종목</span></div>
     ${chips.length ? `<div class="changes">${chips.join('')}</div>` : '<div style="height:12px"></div>'}
-    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">시가총액</th></tr></thead>
+    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">점수</th><th class="num">시가총액</th></tr></thead>
       <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
   </section>`;
+}
+
+// 시장 체온계
+function thermo(meta, ix) {
+  const b = meta.breadth;
+  if (!b) return '';
+  const last = k => b[k][b[k].length - 1], ago = k => b[k][Math.max(0, b[k].length - 6)];
+  const tile = (k, label) => {
+    const v = last(k), d = v - ago(k);
+    return `<div class="tile"><div class="k">${label}</div><div class="v">${v.toFixed(0)}%</div>
+      <div class="d ${d > 0 ? 'ret-up' : d < 0 ? 'ret-dn' : 'tag'}">5일 ${d > 0 ? '+' : ''}${d.toFixed(1)}%p</div></div>`;
+  };
+  const s = last('short'), sd = s - ago('short');
+  const mood = s >= 50 && sd >= 0 ? '🔥 추세 확산 — 정배열 신호를 적극적으로 볼 만한 국면'
+    : s >= 50 ? '⚠️ 넓게 퍼졌지만 줄어드는 중 — 신규 진입은 신중하게'
+    : sd > 0 ? '🌱 회복 중 — 정배열 종목이 늘어나는 초기'
+    : '❄️ 약세 국면 — 정배열 종목이 적고 줄어드는 중';
+  return `<section>
+    <div class="sec-head"><h2>시장 체온계</h2><span class="count">${ix.name} 중 정배열 비율</span></div>
+    <div class="mood">${mood}</div>
+    <div class="tiles">${tile('short','단기 정배열')}${tile('mid','중기 정배열')}${tile('full','완전정배열')}</div>
+    <div class="mini-chart"><canvas id="thermo"></canvas></div>
+    <div class="legend"><span><i style="background:${COLORS[0]}"></i>단기</span><span><i style="background:${COLORS[1]}"></i>중기</span><span><i style="background:${COLORS[2]}"></i>완전정배열</span></div>
+  </section>`;
+}
+
+function drawThermo(meta) {
+  const el = document.getElementById('thermo');
+  if (!el || !window.Chart || !meta.breadth) return;
+  const b = meta.breadth;
+  const ds = [['short','단기'],['mid','중기'],['full','완전정배열']].map(([k, l], i) => ({
+    label: l, data: b[k], borderColor: COLORS[i], backgroundColor: COLORS[i], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.2 }));
+  charts.push(new Chart(el, { type: 'line', data: { labels: b.dates, datasets: ds },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'),
+        borderColor: css('--line'), borderWidth: 1, callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y}%` } } },
+      scales: { x: { ticks: { color: css('--muted'), maxTicksLimit: 4, maxRotation: 0 }, grid: { color: css('--grid') } },
+                y: { min: 0, ticks: { color: css('--muted'), callback: v => v + '%' }, grid: { color: css('--grid') } } } } }));
+}
+
+// 신호 성적표
+function scoreTable(meta) {
+  const sc = meta.scorecard;
+  if (!sc) return '';
+  const pct = v => v == null ? '-' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+  const rows = [['short','단기'],['mid','중기']].flatMap(([k, l]) => ['5','10','20'].map((h, i) => {
+    const r = sc[k] && sc[k][h];
+    return `<tr><td>${i === 0 ? `<b>${l}</b>` : ''}</td><td>${h}일 후</td>
+      ${r ? `<td class="num">${r.n}</td><td class="num">${pct(r.avg)}</td><td class="num">${r.win}%</td><td class="num">${pct(r.excess)}</td>`
+          : '<td class="num tag" colspan="4">자료 부족</td>'}</tr>`;
+  })).join('');
+  const from = (sc.short && sc.short.from) || '';
+  return `<section><details>
+    <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">정배열 신호가 실제로 맞았나</span></div></summary>
+    <div class="note" style="margin:10px 0">${from} 이후 정배열에 <b>새로 들어온 날 종가에 샀다고 가정</b>했을 때의 수익률입니다. "구성종목 평균 대비"가 +면 신호가 시장 평균보다 나았다는 뜻입니다. 수수료·세금 제외, 과거 성과가 미래를 보장하지 않습니다.</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th>보유</th><th class="num">건수</th><th class="num">평균 수익</th><th class="num">승률</th><th class="num">평균 대비</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+  </details></section>`;
 }
 
 async function renderAlignment(ixId) {
@@ -208,13 +288,16 @@ async function renderAlignment(ixId) {
       <label for="date">기준일</label>
       <select id="date">${meta.dates.map(d => `<option ${d === date ? 'selected' : ''}>${d}</option>`).join('')}</select>
       <div class="seg" id="sort">
-        ${[['days','연속일순'],['cap','시가총액순'],['sector','섹터별 묶기']].map(([k, l]) =>
+        ${[['days','연속일순'],['score','품질점수순'],['cap','시가총액순'],['sector','섹터별 묶기']].map(([k, l]) =>
           `<button data-sort="${k}" class="${state.sort === k ? 'on' : ''}">${l}</button>`).join('')}
       </div>
       <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
-      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보</div>
+      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보<br>점수(0~100) = 이평선 간격·20일선 기울기·거래량 증가·52주 고점 근접도 종합 · 과열 = 20일선 대비 +${OVERHEAT}% 이상</div>
     </div>
-    <div id="secs">${data.sections.map(renderSection).join('')}</div>`;
+    ${thermo(meta, ix)}
+    <div id="secs">${data.sections.map(renderSection).join('')}</div>
+    ${scoreTable(meta)}`;
+  drawThermo(meta);
 
   const qi = document.getElementById('q');
   qi.oninput = e => {
@@ -318,7 +401,6 @@ async function renderTrend(market) {
         }).join('')}</tbody></table></div>
     </section>`).join('')}`;
 
-  charts.forEach(c => c.destroy()); charts = [];
   if (!window.Chart) return;
   d.groups.forEach((g, gi) => {
     const datasets = g.series.map((s, i) => {
@@ -353,7 +435,7 @@ function renderSoon(title) {
 
 // ---------------------------------------------------------- 공통
 async function render() {
-  if (!['kr','us'].includes(state.tab)) { charts.forEach(c => c.destroy()); charts = []; }
+  charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
