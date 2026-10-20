@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ETF Trend Dashboard</title>
+<title>Stock Trend Radar</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
@@ -29,6 +29,7 @@
   #theme { position: absolute; top: 18px; right: 16px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
   header h1, header .sub { padding-right: 96px; }
   h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+  .tagline { color: var(--text); font-size: 14px; margin: -2px 0 8px; padding-right: 96px; }
   .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
   main { max-width: 860px; margin: 0 auto; padding: 16px; }
   .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
@@ -94,7 +95,8 @@
 <body>
 <header>
   <button id="theme" type="button">어두운 화면</button>
-  <h1>ETF Trend Dashboard</h1>
+  <h1>Stock Trend Radar</h1>
+  <div class="tagline">코스피200 · 코스닥150 정배열과 국내·미국 ETF 흐름을 매일 한눈에</div>
   <div class="sub" id="updated">불러오는 중…</div>
 </header>
 <main>

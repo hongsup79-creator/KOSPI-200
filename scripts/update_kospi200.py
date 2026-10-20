@@ -128,25 +128,34 @@ def _paged(url_tmpl, max_pages=10):
 
 
 def fetch_constituents(ix):
+    # 네이버는 한 번에 받을 수 있는 개수(pageSize)에 상한이 있어 50 → 20 순으로 시도
     for code in ix["naver"]:
-        url = f"https://m.stock.naver.com/api/index/{code}/enrollStocks?page={{page}}&pageSize=100"
+        for size in (50, 20):
+            url = (f"https://m.stock.naver.com/api/index/{code}/enrollStocks"
+                   f"?page={{page}}&pageSize={size}")
+            try:
+                stocks = _paged(url, max_pages=12)
+            except Exception as e:
+                print(f"  {code} (pageSize={size}) 실패: {str(e)[:120]}")
+                continue
+            if len(stocks) >= ix["min"]:
+                print(f"  구성종목 출처: 네이버 {code} ({len(stocks)}개)")
+                return stocks, "official"
+            print(f"  {code} (pageSize={size}): {len(stocks)}개 → 다음 후보")
+            break
+    # 대체: 시가총액 상위 N종목
+    for size in (50, 20):
+        url = (f"https://m.stock.naver.com/api/stocks/marketValue/{ix['fallback_market']}"
+               f"?page={{page}}&pageSize={size}")
         try:
-            stocks = _paged(url)
+            stocks = _paged(url, max_pages=10)[: ix["fallback_n"]]
         except Exception as e:
-            print(f"  {code} 실패: {e}")
+            print(f"  시가총액 목록 (pageSize={size}) 실패: {str(e)[:120]}")
             continue
         if len(stocks) >= ix["min"]:
-            print(f"  구성종목 출처: 네이버 {code} ({len(stocks)}개)")
-            return stocks, "official"
-        print(f"  {code}: {len(stocks)}개 → 다음 후보")
-    # 대체: 시가총액 상위 N종목
-    url = (f"https://m.stock.naver.com/api/stocks/marketValue/{ix['fallback_market']}"
-           f"?page={{page}}&pageSize=100")
-    stocks = _paged(url, max_pages=3)[: ix["fallback_n"]]
-    if len(stocks) < ix["min"]:
-        raise RuntimeError(f"{ix['name']} 구성종목을 가져오지 못했습니다 ({len(stocks)}개)")
-    warn(f"{ix['name']} 공식 구성종목을 못 찾아 시가총액 상위 {len(stocks)}종목으로 대체했습니다.")
-    return stocks, "marketcap"
+            warn(f"{ix['name']} 공식 구성종목을 못 찾아 시가총액 상위 {len(stocks)}종목으로 대체했습니다.")
+            return stocks, "marketcap"
+    raise RuntimeError(f"{ix['name']} 구성종목을 가져오지 못했습니다.")
 
 
 def fetch_sectors():
