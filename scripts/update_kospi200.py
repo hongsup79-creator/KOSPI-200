@@ -6,9 +6,12 @@
        python scripts/update_kospi200.py --demo   # 가짜 데이터로 화면 미리보기
 
 데이터 출처 (모두 로그인 불필요)
-  - 구성종목·시가총액 : 네이버 증권 모바일 API
-  - 일별 종가         : 야후 파이낸스 (yfinance)
-  - 업종(섹터)        : 한국거래소 KIND 상장법인 목록
+  (참고: jblee1031/ETF_trend 와 같은 출처)
+  - 구성종목          : 지수 추종 ETF 보유종목 (네이버 wisereport)
+                        코스피200 = KODEX 200(069500), 코스닥150 = KODEX 코스닥150(229200)
+  - 국내 일별 종가    : 네이버 차트 (fchart.stock.naver.com)
+  - 미국 일별 종가    : 야후 파이낸스
+  - 업종(섹터)        : 네이버 업종 분류 (실패 시 한국거래소 KIND)
 
 결과
   data/kospi200/YYYY-MM-DD.json, data/kospi200/dates.json
@@ -47,9 +50,12 @@ SNAPSHOT_DAYS = 20
 
 INDEXES = [
     {"id": "kospi200", "name": "코스피200", "suffix": ".KS", "min": 150,
-     "naver": ["KPI200"], "fallback_market": "KOSPI", "fallback_n": 200},
+     "naver": ["KPI200"], "etf": "069500", "market_type": "KOSPI",
+     "fallback_market": "KOSPI", "fallback_n": 200},
+    # 네이버에 코스닥150 구성종목 목록이 없어, 지수를 그대로 복제하는
+    # KODEX 코스닥150(229200)의 실제 보유종목을 구성종목으로 사용
     {"id": "kosdaq150", "name": "코스닥150", "suffix": ".KQ", "min": 110,
-     "naver": ["KSQ150", "KQ150", "KOSDAQ150", "KPQ150"],
+     "naver": [], "etf": "229200", "market_type": "KOSDAQ",
      "fallback_market": "KOSDAQ", "fallback_n": 150},
 ]
 
@@ -127,8 +133,116 @@ def _paged(url_tmpl, max_pages=10):
     return stocks
 
 
-def fetch_constituents(ix):
-    # 네이버는 한 번에 받을 수 있는 개수(pageSize)에 상한이 있어 50 → 20 순으로 시도
+def universe_from_etf(etf_code, market_type, caps):
+    """지수 추종 ETF의 보유종목(wisereport) → [(코드, 이름, 시가총액)]"""
+    r = _get(f"https://navercomp.wisereport.co.kr/v2/ETF/index.aspx?cmp_cd={etf_code}", as_json=False)
+    m = re.search(r"var CU_data = (\{.*?\});", r.text, re.S)
+    if not m:
+        raise RuntimeError("ETF 보유종목 데이터를 찾지 못했습니다.")
+    rows = json.loads(m.group(1)).get("grid_data", [])
+    out, unresolved = [], []
+    for row in rows:
+        name = str(row.get("STK_NM_KOR", "")).strip()
+        if not name or name in ("원화현금", "현금"):
+            continue
+        code = next((re.sub(r"^A", "", str(v)) for v in row.values()
+                     if re.fullmatch(r"A?\d{6}", str(v))), None)
+        if not code:
+            code = _code_by_name(name, market_type)
+        if code:
+            out.append((code, name, caps.get(code, 0)))
+        else:
+            unresolved.append(name)
+        time.sleep(0.05)
+    if unresolved:
+        print(f"  종목코드 못 찾음 {len(unresolved)}개: {unresolved[:8]}")
+    return out
+
+
+def _code_by_name(name, market_type):
+    import urllib.parse
+    try:
+        data = _get(f"https://ac.stock.naver.com/ac?q={urllib.parse.quote(name)}&target=stock")
+    except Exception:
+        return None
+    hit = []
+
+    def walk(o):
+        if isinstance(o, dict):
+            if o.get("name") == name and str(o.get("typeCode", "")).upper() == market_type \
+                    and re.fullmatch(r"\d{6}", str(o.get("code", ""))):
+                hit.append(str(o["code"]))
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(data)
+    return hit[0] if hit else None
+
+
+def fetch_industry():
+    """네이버 업종 분류 → ({코드: 업종명}, {코드: 시가총액})"""
+    sectors, caps = {}, {}
+    groups, seen = [], set()
+    for page in range(1, 6):
+        try:
+            data = _get(f"https://m.stock.naver.com/api/stocks/industry?page={page}")
+        except Exception as e:
+            print(f"  업종 목록 실패: {str(e)[:100]}")
+            break
+        found = []
+
+        def walk(o):
+            if isinstance(o, dict):
+                no = next((o[k] for k in ("no", "industryCode", "upjongNo") if k in o), None)
+                nm = next((o[k] for k in ("name", "industryName", "upjongName") if k in o), None)
+                if no is not None and nm and str(no) not in seen:
+                    found.append((str(no), str(nm)))
+                    return
+                for v in o.values():
+                    walk(v)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v)
+
+        walk(data)
+        if not found:
+            break
+        for g in found:
+            seen.add(g[0])
+        groups += found
+        time.sleep(0.1)
+    for no, nm in groups:
+        for size in (100, 50):
+            try:
+                rows = _paged(f"https://m.stock.naver.com/api/stocks/industry/{no}?page={{page}}&pageSize={size}",
+                              max_pages=10)
+                break
+            except Exception:
+                rows = []
+        for code, _name, cap in rows:
+            sectors[code] = nm
+            if cap:
+                caps[code] = cap
+        time.sleep(0.05)
+    print(f"  네이버 업종 {len(groups)}개, 종목 {len(sectors)}개")
+    return sectors, caps
+
+
+def fetch_constituents(ix, caps=None):
+    # 1순위: 지수 추종 ETF 보유종목 (참고 대시보드와 같은 방식)
+    if ix.get("etf"):
+        try:
+            stocks = universe_from_etf(ix["etf"], ix["market_type"], caps or {})
+            if len(stocks) >= ix["min"]:
+                print(f"  구성종목 출처: {ix['etf']} ETF 보유종목 ({len(stocks)}개)")
+                return stocks, "etf"
+            print(f"  ETF 보유종목 {len(stocks)}개뿐 → 다음 방법")
+        except Exception as e:
+            print(f"  ETF 보유종목 실패: {str(e)[:120]}")
+    # 2순위: 네이버 지수 구성종목 목록 (pageSize 상한 때문에 50 → 20)
     for code in ix["naver"]:
         for size in (50, 20):
             url = (f"https://m.stock.naver.com/api/index/{code}/enrollStocks"
@@ -143,7 +257,7 @@ def fetch_constituents(ix):
                 return stocks, "official"
             print(f"  {code} (pageSize={size}): {len(stocks)}개 → 다음 후보")
             break
-    # 대체: 시가총액 상위 N종목
+    # 3순위: 시가총액 상위 N종목
     for size in (50, 20):
         url = (f"https://m.stock.naver.com/api/stocks/marketValue/{ix['fallback_market']}"
                f"?page={{page}}&pageSize={size}")
@@ -175,19 +289,43 @@ def fetch_sectors():
         return {}
 
 
-def fetch_prices(codes, suffix):
-    import yfinance as yf
-    raw = yf.download([c + suffix for c in codes], period="2y", interval="1d",
-                      auto_adjust=True, progress=False, threads=True)
-    close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
-    close.columns = [str(c).split(".")[0] for c in close.columns]
-    close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
-    return close.sort_index().dropna(how="all").tail(HISTORY_DAYS).replace(0, np.nan)
+def naver_history(code, count):
+    """네이버 차트(fchart) 일봉 종가 → pd.Series (참고 대시보드와 같은 출처)"""
+    url = (f"https://fchart.stock.naver.com/sise.nhn?symbol={code}"
+           f"&timeframe=day&count={count}&requestType=0")
+    r = _get(url, as_json=False)
+    text = r.content.decode("euc-kr", errors="replace")
+    rows = {}
+    for d, c in re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|', text):
+        rows[pd.Timestamp(d)] = float(c)
+    return pd.Series(rows, dtype=float).sort_index()
 
 
-def fetch_real(ix, sectors):
-    stocks, source = fetch_constituents(ix)
-    price = fetch_prices([c for c, *_ in stocks], ix["suffix"])
+def fetch_prices(codes, count=HISTORY_DAYS):
+    closes, failed = {}, []
+    for i, c in enumerate(codes, 1):
+        try:
+            sr = naver_history(c, count)
+            if len(sr):
+                closes[c] = sr
+            else:
+                failed.append(c)
+        except Exception:
+            failed.append(c)
+        if i % 50 == 0:
+            print(f"  시세 수집 {i}/{len(codes)}")
+        time.sleep(0.08)
+    if failed:
+        print(f"  시세 실패 {len(failed)}개: {failed[:10]}")
+    price = pd.DataFrame(closes).sort_index()
+    return price.dropna(how="all").tail(count).replace(0, np.nan)
+
+
+def fetch_real(ix, sectors, caps=None):
+    stocks, source = fetch_constituents(ix, caps)
+    caps = caps or {}
+    stocks = [(c, n, cap or caps.get(c, 0)) for c, n, cap in stocks]
+    price = fetch_prices([c for c, *_ in stocks])
     missing = [c for c, *_ in stocks if c not in price.columns or price[c].notna().sum() == 0]
     if missing:
         print(f"  시세 없음 {len(missing)}개 제외: {missing[:10]}")
@@ -200,7 +338,7 @@ def fetch_real(ix, sectors):
     return price, info, source
 
 
-def fetch_demo(ix, _sectors):
+def fetch_demo(ix, _sectors, _caps=None):
     rng = np.random.default_rng(7 if ix["id"] == "kospi200" else 11)
     secs = ["반도체", "자동차", "화학", "은행", "바이오", "해운", "유틸리티", "인터넷", "2차전지", "소프트웨어"]
     n = 40 if ix["id"] == "kospi200" else 30
@@ -306,16 +444,13 @@ def build_trend(market, groups, demo, updated):
         days = pd.bdate_range(end=datetime.now(KST).date(), periods=TREND_DAYS)
         close = pd.DataFrame({ticker(c): 10000 * np.exp(np.cumsum(rng.normal(0.0003, 0.02, len(days))))
                               for c in codes}, index=days)
+    elif market == "kr":
+        # 국내: 네이버 차트 (참고 대시보드와 같은 출처)
+        close = fetch_prices(codes, count=TREND_DAYS)
+        close.columns = [ticker(c) for c in close.columns]
     else:
+        # 미국: 야후 파이낸스 (참고 대시보드와 같은 출처)
         close = _yf_close([ticker(c) for c in codes])
-        # 국내 코스피 시세가 없으면 코스닥(.KQ)으로 재시도
-        if market == "kr":
-            miss = [c for c in codes if ticker(c) not in close or close[ticker(c)].notna().sum() == 0]
-            if miss:
-                extra = _yf_close([c + ".KQ" for c in miss])
-                for c in miss:
-                    if c + ".KQ" in extra:
-                        close[ticker(c)] = extra[c + ".KQ"]
     close = close.tail(TREND_DAYS)
 
     out_groups = []
@@ -343,7 +478,11 @@ def main():
     ap.add_argument("--demo", action="store_true")
     args = ap.parse_args()
     updated = datetime.now(KST).isoformat(timespec="seconds")
-    sectors = {} if args.demo else fetch_sectors()
+    sectors, caps = {}, {}
+    if not args.demo:
+        nav_sec, caps = fetch_industry()
+        kind = fetch_sectors() if len(nav_sec) < 1000 else {}
+        sectors = {**kind, **nav_sec}   # 네이버 업종 우선, 없으면 KIND
 
     sector_file = DATA / "sectors.json"
     try:
@@ -355,7 +494,7 @@ def main():
     for ix in INDEXES:
         print(f"[{ix['name']}]")
         try:
-            price, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors)
+            price, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps)
             sector_out[ix["id"]] = build(ix, price, info, source, args.demo, updated)
             ok += 1
         except Exception as e:

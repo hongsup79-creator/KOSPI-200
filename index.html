@@ -212,7 +212,7 @@ async function renderAlignment(ixId) {
           `<button data-sort="${k}" class="${state.sort === k ? 'on' : ''}">${l}</button>`).join('')}
       </div>
       <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
-      <div class="note">${ix.name} 구성 ${data.universe}종목 · 종목명 누르면 FnGuide 기업정보</div>
+      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보</div>
     </div>
     <div id="secs">${data.sections.map(renderSection).join('')}</div>`;
 
