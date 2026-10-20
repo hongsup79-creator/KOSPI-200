@@ -70,18 +70,56 @@ def warn(msg):
     print(f"::warning::{msg}")
 
 
+CACHE = DATA / "cache"
+WORKERS = 8          # 동시에 받는 개수 (너무 크면 네이버가 막을 수 있음)
+
+
+def pmap(fn, items):
+    """여러 건을 동시에 처리 (순서 유지)"""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        return list(ex.map(fn, items))
+
+
+def load_cache(name, max_age_days=None):
+    f = CACHE / f"{name}.json"
+    try:
+        d = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if max_age_days is not None:
+        saved = datetime.fromisoformat(d.get("_saved", "2000-01-01T00:00:00+09:00"))
+        if datetime.now(KST) - saved > timedelta(days=max_age_days):
+            return None
+    return d
+
+
+def save_cache(name, d):
+    CACHE.mkdir(parents=True, exist_ok=True)
+    d["_saved"] = datetime.now(KST).isoformat(timespec="seconds")
+    (CACHE / f"{name}.json").write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+
+def _norm(name):
+    return re.sub(r"\s+", "", str(name))
+
+
 # ---------------------------------------------------------------- 수집 도구
 def _get(url, as_json=True):
     import requests
     last = None
     for attempt in range(3):
         try:
-            r = requests.get(url, headers=UA, timeout=20)
+            r = requests.get(url, headers=UA, timeout=15)
+            if 400 <= r.status_code < 500:      # 요청 자체가 거부된 경우는 재시도해도 소용없음
+                raise RuntimeError(f"{r.status_code} 거부")
             r.raise_for_status()
             return r.json() if as_json else r
+        except RuntimeError:
+            raise
         except Exception as e:
             last = e
-            time.sleep(2)
+            time.sleep(1.5)
     raise RuntimeError(f"접속 실패: {url} ({last})")
 
 
@@ -129,33 +167,39 @@ def _paged(url_tmpl, max_pages=10):
             break
         seen.update(r[0] for r in rows)
         stocks += rows
-        time.sleep(0.2)
+        time.sleep(0.05)
     return stocks
 
 
-def universe_from_etf(etf_code, market_type, caps):
+def universe_from_etf(etf_code, market_type, caps, name_map=None):
     """지수 추종 ETF의 보유종목(wisereport) → [(코드, 이름, 시가총액)]"""
     r = _get(f"https://navercomp.wisereport.co.kr/v2/ETF/index.aspx?cmp_cd={etf_code}", as_json=False)
     m = re.search(r"var CU_data = (\{.*?\});", r.text, re.S)
     if not m:
         raise RuntimeError("ETF 보유종목 데이터를 찾지 못했습니다.")
     rows = json.loads(m.group(1)).get("grid_data", [])
-    out, unresolved = [], []
+    known = (load_cache("codes") or {}).get("map", {})     # 이전에 확인한 이름→코드
+    name_map = name_map or {}
+    names, codes = [], {}
     for row in rows:
         name = str(row.get("STK_NM_KOR", "")).strip()
         if not name or name in ("원화현금", "현금"):
             continue
+        names.append(name)
         code = next((re.sub(r"^A", "", str(v)) for v in row.values()
                      if re.fullmatch(r"A?\d{6}", str(v))), None)
-        if not code:
-            code = _code_by_name(name, market_type)
-        if code:
-            out.append((code, name, caps.get(code, 0)))
-        else:
-            unresolved.append(name)
-        time.sleep(0.05)
+        codes[name] = code or known.get(name) or name_map.get(_norm(name))
+    todo = [n for n in names if not codes[n]]
+    if todo:                                                 # 남은 것만 검색 (동시에)
+        for n, c in zip(todo, pmap(lambda n: _code_by_name(n, market_type), todo)):
+            codes[n] = c
+    known.update({n: c for n, c in codes.items() if c})
+    save_cache("codes", {"map": known})
+    out = [(codes[n], n, caps.get(codes[n], 0)) for n in names if codes[n]]
+    unresolved = [n for n in names if not codes[n]]
     if unresolved:
         print(f"  종목코드 못 찾음 {len(unresolved)}개: {unresolved[:8]}")
+    print(f"  이름→코드: 저장분·업종목록 {len(names) - len(todo)}개, 새로 검색 {len(todo)}개")
     return out
 
 
@@ -183,14 +227,16 @@ def _code_by_name(name, market_type):
 
 
 def fetch_industry():
-    """네이버 업종 분류 → ({코드: 업종명}, {코드: 시가총액})"""
-    sectors, caps = {}, {}
+    """네이버 업종 분류 → ({코드: 업종}, {코드: 시가총액}, {이름: 코드}). 업종은 7일마다 새로 받음"""
+    cached = load_cache("industry", max_age_days=7)
+    if cached:
+        print(f"  업종: 저장분 사용 ({cached['_saved'][:10]}, 종목 {len(cached['sectors'])}개)")
+        return cached["sectors"], cached["caps"], cached["names"]
     groups, seen = [], set()
     for page in range(1, 6):
         try:
             data = _get(f"https://m.stock.naver.com/api/stocks/industry?page={page}")
-        except Exception as e:
-            print(f"  업종 목록 실패: {str(e)[:100]}")
+        except Exception:
             break
         found = []
 
@@ -210,32 +256,37 @@ def fetch_industry():
         walk(data)
         if not found:
             break
-        for g in found:
-            seen.add(g[0])
+        seen.update(g[0] for g in found)
         groups += found
-        time.sleep(0.1)
-    for no, nm in groups:
-        for size in (100, 50):
+
+    def one(g):
+        no, _ = g
+        for size in (50, 20):
             try:
-                rows = _paged(f"https://m.stock.naver.com/api/stocks/industry/{no}?page={{page}}&pageSize={size}",
+                return _paged(f"https://m.stock.naver.com/api/stocks/industry/{no}?page={{page}}&pageSize={size}",
                               max_pages=10)
-                break
             except Exception:
-                rows = []
-        for code, _name, cap in rows:
+                continue
+        return []
+
+    sectors, caps, names = {}, {}, {}
+    for (no, nm), rows in zip(groups, pmap(one, groups)):
+        for code, name, cap in rows:
             sectors[code] = nm
+            names[_norm(name)] = code
             if cap:
                 caps[code] = cap
-        time.sleep(0.05)
     print(f"  네이버 업종 {len(groups)}개, 종목 {len(sectors)}개")
-    return sectors, caps
+    if len(sectors) > 1000:
+        save_cache("industry", {"sectors": sectors, "caps": caps, "names": names})
+    return sectors, caps, names
 
 
-def fetch_constituents(ix, caps=None):
+def fetch_constituents(ix, caps=None, name_map=None):
     # 1순위: 지수 추종 ETF 보유종목 (참고 대시보드와 같은 방식)
     if ix.get("etf"):
         try:
-            stocks = universe_from_etf(ix["etf"], ix["market_type"], caps or {})
+            stocks = universe_from_etf(ix["etf"], ix["market_type"], caps or {}, name_map)
             if len(stocks) >= ix["min"]:
                 print(f"  구성종목 출처: {ix['etf']} ETF 보유종목 ({len(stocks)}개)")
                 return stocks, "etf"
@@ -303,19 +354,18 @@ def naver_history(code, count):
 
 
 def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
-    closes, vols, failed = {}, {}, []
-    for i, c in enumerate(codes, 1):
+    def one(c):
         try:
-            df = naver_history(c, count)
-            if len(df):
-                closes[c], vols[c] = df["close"], df["vol"]
-            else:
-                failed.append(c)
+            return naver_history(c, count)
         except Exception:
+            return None
+    closes, vols, failed = {}, {}, []
+    for c, df in zip(codes, pmap(one, codes)):
+        if df is not None and len(df):
+            closes[c], vols[c] = df["close"], df["vol"]
+        else:
             failed.append(c)
-        if i % 50 == 0:
-            print(f"  시세 수집 {i}/{len(codes)}")
-        time.sleep(0.08)
+    print(f"  시세 {len(closes)}/{len(codes)}개 수집")
     if failed:
         print(f"  시세 실패 {len(failed)}개: {failed[:10]}")
     price = pd.DataFrame(closes).sort_index().dropna(how="all").tail(count).replace(0, np.nan)
@@ -325,8 +375,8 @@ def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
     return price, vol
 
 
-def fetch_real(ix, sectors, caps=None):
-    stocks, source = fetch_constituents(ix, caps)
+def fetch_real(ix, sectors, caps=None, name_map=None):
+    stocks, source = fetch_constituents(ix, caps, name_map)
     caps = caps or {}
     stocks = [(c, n, cap or caps.get(c, 0)) for c, n, cap in stocks]
     price, vol = fetch_prices([c for c, *_ in stocks], with_volume=True)
@@ -342,7 +392,7 @@ def fetch_real(ix, sectors, caps=None):
     return price, vol, info, source
 
 
-def fetch_demo(ix, _sectors, _caps=None):
+def fetch_demo(ix, _sectors, _caps=None, _names=None):
     rng = np.random.default_rng(7 if ix["id"] == "kospi200" else 11)
     secs = ["반도체", "자동차", "화학", "은행", "바이오", "해운", "유틸리티", "인터넷", "2차전지", "소프트웨어"]
     n = 40 if ix["id"] == "kospi200" else 30
@@ -539,9 +589,11 @@ def main():
     ap.add_argument("--demo", action="store_true")
     args = ap.parse_args()
     updated = datetime.now(KST).isoformat(timespec="seconds")
-    sectors, caps = {}, {}
+    sectors, caps, name_map = {}, {}, {}
     if not args.demo:
-        nav_sec, caps = fetch_industry()
+        t_ind = time.time()
+        nav_sec, caps, name_map = fetch_industry()
+        print(f"  업종 수집 {time.time() - t_ind:.0f}초")
         kind = fetch_sectors() if len(nav_sec) < 1000 else {}
         sectors = {**kind, **nav_sec}   # 네이버 업종 우선, 없으면 KIND
 
@@ -552,10 +604,11 @@ def main():
         sector_out = {}
 
     ok = 0
+    t0 = time.time()
     for ix in INDEXES:
-        print(f"[{ix['name']}]")
+        print(f"[{ix['name']}]  (+{time.time() - t0:.0f}초)")
         try:
-            price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps)
+            price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps, name_map)
             sector_out[ix["id"]] = build(ix, price, vol, info, source, args.demo, updated)
             ok += 1
         except Exception as e:
@@ -578,6 +631,7 @@ def main():
         sector_out["demo"] = args.demo
         DATA.mkdir(exist_ok=True)
         sector_file.write_text(json.dumps(sector_out, ensure_ascii=False), encoding="utf-8")
+    print(f"총 소요 {time.time() - t0:.0f}초")
     if ok < len(INDEXES) + 2:
         print(f"일부 실패: {ok}/{len(INDEXES) + 2} 성공", file=sys.stderr)
     if ok == 0:
