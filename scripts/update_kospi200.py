@@ -527,8 +527,17 @@ def build(ix, price, vol, info, source, demo, updated):
     for t in info:
         universe[info[t]["sector"]] = universe.get(info[t]["sector"], 0) + 1
     print(f"  저장 완료: {out_dir.name} (최신 {meta['dates'][0]})")
+    last = sections  # 가장 최근 기준일의 섹션 (루프 마지막)
+    b = meta["breadth"]
+    summary = {"name": ix["name"], "date": meta["dates"][0],
+               "short": b["short"][-1], "short5": b["short"][-1] - b["short"][-6] if len(b["short"]) > 5 else 0,
+               "sections": [{"title": x["title"],
+                             "count": len(x["items"]),
+                             "new": sorted([i for i in x["items"] if i["days"] == 1], key=lambda i: -(i["score"] or 0)),
+                             "dropped": x["dropped"],
+                             "hot": [i for i in x["items"] if (i["gap"] or 0) >= 15]} for x in last]}
     return {"name": ix["name"], "dates": [d.strftime("%Y-%m-%d") for d in dates],
-            "universe": universe, "flow": flow}
+            "universe": universe, "flow": flow}, summary
 
 
 # ---------------------------------------------------------------- ETF·미국 추이
@@ -587,6 +596,53 @@ def build_trend(market, groups, demo, updated):
     print(f"  저장 완료: {market}_trend.json (묶음 {len(out_groups)}개, 최신 {out['dates'][-1]})")
 
 
+# ---------------------------------------------------------------- 텔레그램 알림
+DASHBOARD_URL = "https://hongsup79-creator.github.io/KOSPI-200/"
+
+
+def telegram_text(summaries):
+    def names(items, n=6, with_score=False):
+        if not items:
+            return "없음"
+        import html
+        out = [html.escape(f"{i['name']}({i['score']:.0f})" if with_score and i.get("score") is not None else i["name"])
+               for i in items[:n]]
+        return ", ".join(out) + (f" 외 {len(items) - n}" if len(items) > n else "")
+
+    lines = [f"📡 <b>Stock Trend Radar</b> {summaries[0]['date']}"]
+    for sm in summaries:
+        d = sm["short5"]
+        mood = ("🔥 추세 확산" if sm["short"] >= 50 and d >= 0 else "⚠️ 확산 둔화" if sm["short"] >= 50
+                else "🌱 회복 중" if d > 0 else "❄️ 약세")
+        lines.append(f"\n<b>[{sm['name']}]</b> 단기 정배열 {sm['short']:.0f}% (5일 {d:+.1f}%p) {mood}")
+        for sec in sm["sections"]:
+            lines.append(f"· {sec['title']} {sec['count']}종목")
+            lines.append(f"  🆕 편입: {names(sec['new'], with_score=True)}")
+            if sec["dropped"]:
+                lines.append(f"  ↘ 편출: {names(sec['dropped'])}")
+            if sec["hot"]:
+                lines.append(f"  🌡 과열: {names(sec['hot'])}")
+    lines.append(f"\n👉 {DASHBOARD_URL}")
+    return "\n".join(lines)
+
+
+def send_telegram(summaries):
+    """GitHub Secrets에 TELEGRAM_TOKEN, TELEGRAM_CHAT_ID가 있을 때만 전송"""
+    import os
+    import requests
+    token, chat = os.getenv("TELEGRAM_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("텔레그램: 설정 없음 → 건너뜀")
+        return
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", timeout=15,
+                          data={"chat_id": chat, "text": telegram_text(summaries)[:4000],
+                                "parse_mode": "HTML", "disable_web_page_preview": "true"})
+        print("텔레그램: 전송 완료" if r.ok else f"텔레그램: 실패 {r.status_code} {r.text[:150]}")
+    except Exception as e:
+        warn(f"텔레그램 전송 실패: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true")
@@ -608,11 +664,13 @@ def main():
 
     ok = 0
     t0 = time.time()
+    summaries = []
     for ix in INDEXES:
         print(f"[{ix['name']}]  (+{time.time() - t0:.0f}초)")
         try:
             price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps, name_map)
-            sector_out[ix["id"]] = build(ix, price, vol, info, source, args.demo, updated)
+            sector_out[ix["id"]], summ = build(ix, price, vol, info, source, args.demo, updated)
+            summaries.append(summ)
             ok += 1
         except Exception as e:
             warn(f"{ix['name']} 실패: {e}")
@@ -635,6 +693,8 @@ def main():
         DATA.mkdir(exist_ok=True)
         sector_file.write_text(json.dumps(sector_out, ensure_ascii=False), encoding="utf-8")
     print(f"총 소요 {time.time() - t0:.0f}초")
+    if summaries and not args.demo:
+        send_telegram(summaries)
     if ok < len(INDEXES) + 2:
         print(f"일부 실패: {ok}/{len(INDEXES) + 2} 성공", file=sys.stderr)
     if ok == 0:
