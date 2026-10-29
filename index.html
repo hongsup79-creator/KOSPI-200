@@ -135,6 +135,26 @@
   .defs b { color: var(--text); }
   .sub-h { font-size: 14px; font-weight: 700; margin: 16px 0 4px; }
   .toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .g { display: inline-block; min-width: 20px; text-align: center; border-radius: 6px; padding: 1px 6px; font-weight: 700; font-size: 12px; }
+  .g.A { background: var(--green); color: #fff; } .g.B { background: var(--green-bg); color: var(--green); }
+  .g.C { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .chip.A { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+  .chip.B { border-color: var(--green); color: var(--green); }
+  .chip.C { color: var(--muted); }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+  .modal .box { background: var(--panel); color: var(--text); width: 100%; max-width: 760px; max-height: 92vh; overflow-y: auto;
+                border-radius: 16px 16px 0 0; padding: 16px; }
+  @media (min-width: 700px) { .modal { align-items: center; } .modal .box { border-radius: 16px; } }
+  .modal .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .modal .top h2 { margin: 0; font-size: 20px; }
+  .modal .x { margin-left: auto; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  .stock-chart { position: relative; height: 280px; margin: 10px 0 6px; }
+  .mk { table-layout: fixed; }
+  .mk td { padding: 7px 4px; font-size: 13px; }
+  .mk .chip { white-space: normal; }
+  .mk th:first-child, .mk td:first-child { width: 72px; padding-right: 8px; } .mk th:last-child, .mk td:last-child { width: 80px; }
+  .tri-up { color: var(--up); font-weight: 700; } .tri-dn { color: var(--dn); font-weight: 700; }
+  .tri-off { color: var(--muted); }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
@@ -161,7 +181,7 @@ const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
 };
-const state = { tab: 'kospi200', sort: 'days', q: '', view: 'early', e2: true, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const state = { tab: 'kospi200', sort: 'days', q: '', view: 'cands', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
 const PALETTE = {
   light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
   dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
@@ -204,7 +224,7 @@ const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo'
 function row(it) {
   const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
-    <td><a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
+    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
     <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배">${it.score ?? '-'}</span></td>
@@ -281,9 +301,28 @@ function drawThermo(meta) {
 // 신호 성적표
 const pctS = v => v == null ? '<span class="tag">-</span>' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
 const matchQ = it => { const q = state.q.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q) || (it.sector || '').toLowerCase().includes(q) || it.code.includes(q); };
-const nameCell = it => `<a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>`;
+const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>`;
 const alignTag = it => it.aligned && it.aligned.length
   ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
+
+function renderCands(data, meta) {
+  const rules = Object.fromEntries((meta.rules || []).map(r => [r.id, r]));
+  const ok = g => state.gA ? g === 'A' : (g === 'A' || g === 'B');
+  let items = (data.cands || []).filter(matchQ).filter(c => c.rules.some(r => rules[r] && ok(rules[r].grade)));
+  const passed = (meta.rules || []).filter(r => ok(r.grade));
+  return `<section>
+    <div class="sec-head"><h2>🎯 검증된 후보</h2><span class="count">${items.length}종목</span></div>
+    <div class="note" style="margin:6px 0 10px">5년 데이터의 <b>앞 기간('22~'24)과 뒤 기간('25~'26) 모두에서</b> 시장 평균을 이긴 규칙이 최근 3거래일 안에 켜진 종목입니다. 성적은 다음 날 종가에 산 기준이라, <b>오늘·어제 켜진 종목</b>이 검증 조건에 가장 가깝습니다.
+      <span class="g A">A</span> 두 기간 모두 + 통계적으로 확실 · <span class="g B">B</span> 두 기간 모두 +
+      <label class="toggle"><input type="checkbox" id="gA" ${state.gA ? 'checked' : ''}> A등급만</label></div>
+    ${passed.length ? '' : '<div class="empty">지금 데이터로는 통과한 규칙이 없습니다.</div>'}
+    ${items.length ? `<table><thead><tr><th>종목 · 켜진 규칙</th><th class="sector-col">섹터</th><th class="num">이격도</th><th class="num">시가총액</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${nameCell(it)} <span class="g ${it.best}">${it.best}</span> <span class="tag">${it.ago === 0 ? '오늘' : it.ago === 1 ? '어제' : it.ago + '일 전'}</span><br>${it.rules.filter(r => rules[r] && ok(rules[r].grade)).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('')}</td>
+        <td class="sector sector-col">${esc(it.sector)}</td><td class="num">${it.gap == null ? '-' : (it.gap > 0 ? '+' : '') + it.gap + '%'}</td><td class="num">${fmtCap(it.cap)}</td></tr>`).join('')}
+    </tbody></table>` : (passed.length ? '<div class="empty">오늘은 해당 종목 없음</div>' : '')}
+    ${(meta.rules || []).length ? `<details class="defs"><summary>규칙과 등급 보기 ▾</summary>${meta.rules.map(r => `<div><span class="g ${r.grade}">${r.grade}</span> <b>${esc(r.name)}</b> — ${esc(r.desc)}</div>`).join('')}</details>` : ''}
+  </section>`;
+}
 
 function renderEarly(data, meta) {
   const names = Object.fromEntries((meta.defs ? meta.defs.early : []).map(d => [d.id, d.name]));
@@ -308,9 +347,9 @@ function renderExits(data, meta) {
   const names = Object.fromEntries((meta.defs ? meta.defs.exits : []).map(d => [d.id, d.name]));
   const items = (data.exits || []).filter(matchQ);
   return `<section>
-    <div class="sec-head"><h2>⛔ 이탈 경보</h2><span class="count">${items.length}종목</span></div>
-    <div class="note" style="margin:6px 0 10px">최근 5일 안에 정배열이었던 종목 중 <b>꺾이기 시작한 것</b>. 정배열이 완전히 깨지기(편출) 전에 미리 알려 줍니다.
-      <span class="lvl l1">1</span> 주의 · <span class="lvl l2">2+</span> 위험</div>
+    <div class="sec-head"><h2>📉 조정 중인 정배열 종목</h2><span class="count">${items.length}종목</span></div>
+    <div class="note" style="margin:6px 0 10px">최근 5일 안에 정배열이었던 종목 중 꺾이기 시작한 것입니다.
+      <b>5년 검증 결과, 이렇게 꺾였을 때 기계적으로 팔면 이후 반등해 오히려 손해인 경우가 많았습니다.</b> 매도 신호가 아니라 점검 목록으로 보세요. 중기 정배열이 유지된 채 꺾인 종목은 '눌림목' 규칙(R7·R8)으로 검증됩니다.</div>
     ${items.length ? `<table><thead><tr><th>종목 · 경보</th><th class="sector-col">섹터</th><th class="num">단계</th><th class="num">고점 대비</th><th class="num">시가총액</th></tr></thead><tbody>
       ${items.map(it => `<tr><td>${nameCell(it)}<br>${it.warns.map(w => `<span class="chip ${it.level >= 2 ? 'r' : 'w'}">${names[w] || w}${w === 'W1' && it.bigvol ? '·대량' : ''}</span>`).join('')}${it.aligned.length ? alignTag(it) : '<span class="chip">정배열 이탈</span>'}</td>
         <td class="sector sector-col">${esc(it.sector)}</td><td class="num"><span class="lvl ${it.level >= 2 ? 'l2' : 'l1'}">${it.level}</span></td>
@@ -323,6 +362,29 @@ function renderExits(data, meta) {
 function defsBlock(meta, key) {
   if (!meta.defs) return '';
   return `<details class="defs"><summary>신호 기준 보기 ▾</summary>${meta.defs[key].map(d => `<div><b>${d.id} ${esc(d.name)}</b> — ${esc(d.desc)}</div>`).join('')}</details>`;
+}
+
+function fwdTable(meta) {
+  const f = meta.forward;
+  if (!f) return '';
+  const row = h => { const r = f.h[h]; return r && r.n ? `<td class="num">${pctS(r.excess)}<br><span class="tag">${r.beat}% · ${r.n}건</span></td>` : '<td class="num tag">아직<br>없음</td>'; };
+  return `<div class="sub-h">⑤ 실전 기록 — ${f.since}부터 화면에 뜬 A·B 후보의 실제 성과</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>기록</th><th class="num">5일 후</th><th class="num">10일 후</th><th class="num">20일 후</th></tr></thead>
+    <tbody><tr><td><b>${f.logged}건</b> 기록</td>${row('5')}${row('10')}${row('20')}</tr></tbody></table></div>
+    <div class="note">규칙을 만든 뒤의 '미래' 데이터라 가장 정직한 성적입니다. 평균 대비(아래: 시장을 이긴 비율·건수). 최소 몇 달은 쌓여야 판단할 수 있습니다.</div>`;
+}
+
+function rulesTable(meta) {
+  if (!meta.rules) return '';
+  const c = r => r ? `${pctS(r.excess)}<br><span class="tag">${r.beat}% · ${r.n}</span>` : '<span class="tag">-</span>';
+  return `<div class="sub-h">⓪ 조합 규칙 — 20일 평균 대비 (아래: 시장을 이긴 비율 · 건수)</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>규칙</th><th class="num">등급</th><th class="num">전체</th><th class="num">앞 기간<br>'22~'24</th><th class="num">뒤 기간<br>'25~'26</th><th class="num">사흘<br>늦게</th></tr></thead><tbody>
+    ${meta.rules.map(r => `<tr><td style="white-space:normal;min-width:130px"><b>${r.id}</b> ${esc(r.name)}</td><td class="num"><span class="g ${r.grade}">${r.grade}</span></td>
+      <td class="num">${c(r.all)}${r.all && r.all.t != null ? `<br><span class="tag">t ${r.all.t}</span>` : ''}</td><td class="num">${c(r.train)}</td><td class="num">${c(r.test)}</td><td class="num">${r.late ? pctS(r.late.excess) : '-'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="note">등급: 앞·뒤 기간 모두 매매비용(${meta.cost ?? 0.3}%)보다 크게 이겼으면 B, 거기에 통계적으로도 확실(t 2.5 이상)하면 A.
+      ‘사흘 늦게’는 신호를 보고 사흘 뒤에 샀을 때입니다 — 이 값이 크게 줄면 빨리 사야 하는 신호입니다.
+      ※ 이 규칙들은 5년 결과를 보고 고른 것이라 뒤 기간도 완전히 새로운 데이터는 아닙니다. 진짜 검증은 아래 ‘⑤ 실전 기록’입니다.</div>`;
 }
 
 function scoreTable(meta) {
@@ -338,21 +400,23 @@ function scoreTable(meta) {
       ${yrs ? `<tr class="yrs"><td colspan="5">연도별 20일: ${yrs}</td></tr>` : ''}`;
   }).join('');
   const ex = sc.exits.map(e => e.n ? `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td>
-      <td class="num">${pctS(e.ret20)}${e.sig ? (e.ret20 < e.ctrl20 ? ' ✅' : ' ⚠️') : ''}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
+      <td class="num">${pctS(e.ret20)}${e.sig ? (e.t < 0 ? ' ✅' : ' ⚠️') : ''}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
     : `<tr><td><b>${esc(e.name)}</b></td><td class="num tag" colspan="4">사례 없음</td></tr>`).join('');
   const mk = sc.market.map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
   return `<section><details>
     <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">어떤 신호가 실제로 맞았나</span></div></summary>
-    <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 날 종가에 샀다고 가정했습니다. 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
+    <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 <b>다음 날 종가</b>에 샀다고 가정했습니다(신호는 장 마감 후에야 알 수 있으므로). 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
       <b>평균 대비</b>가 +면 같은 기간 구성종목 평균보다 나았다는 뜻입니다. 지금의 구성종목으로 계산해 실제보다 조금 좋게 나올 수 있고, 수수료·세금은 빠져 있습니다.<br>
       <b>✅ = 우연으로 보기 어려운 차이</b>(같은 달 신호끼리 묶어 계산한 t값 2 이상, 12개월 이상). ✅가 없는 숫자는 운일 수 있습니다. ⚠️는 반대로 확실히 나빴다는 뜻입니다.
       연도별 숫자가 해마다 같은 방향이면 믿을 만한 신호입니다.</div>
-    <div class="sub-h">① 매수 신호 — 평균 대비 (아래: 승률 · 건수)</div>
+    ${rulesTable(meta)}
+    <div class="sub-h">① 개별 신호 — 평균 대비 (아래: 승률 · 건수)</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th class="num h5">5일</th><th class="num">10일</th><th class="num">20일</th><th class="num">20일<br>강세/약세</th></tr></thead><tbody>${ent}</tbody></table></div>
     <div class="note">강세장 = 단기 정배열 비율 50% 이상인 날 신호, 약세장 = 20% 이하인 날 신호. 위 두 줄(정배열 신규)은 비교 기준입니다.</div>
-    <div class="sub-h">② 이탈 경보 — 경보 뒤 20일</div>
+    <div class="sub-h">② 꺾임 경보 — 경보 뒤 20일</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
-    <div class="note">경보 종목 수익이 "경보 없는 정배열 종목"보다 낮을수록, 경보 때 판 것이 이득이었다는 뜻입니다. ✅는 그 차이가 우연으로 보기 어렵다는 뜻입니다.</div>
+    <div class="note">같은 달끼리 비교해 경보 종목이 확실히 <b>더 나빴으면 ✅</b>(팔아서 이득), 확실히 <b>더 좋았으면 ⚠️</b>(팔면 손해, 반등)입니다.</div>
+    ${fwdTable(meta)}
     <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>
   </details></section>`;
@@ -381,27 +445,29 @@ async function renderAlignment(ixId) {
           `<button data-sort="${k}" class="${state.sort === k ? 'on' : ''}">${l}</button>`).join('')}
       </div>
       <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
-      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보</div>
+      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명을 누르면 <b>진입·경고 시점 차트</b></div>
     </div>
     ${(data.alerts || []).map(a => `<div class="alert ${a.kind}"><b>🚨 ${esc(a.title)}</b>${esc(a.desc)}</div>`).join('')}
     ${thermo(meta, ix)}
     <div class="views" id="views">
-      ${[['early','🚀 초입 후보', (data.early || []).filter(i => i.escore >= 2).length],
+      ${[['cands','🎯 검증 후보', (() => { const g = Object.fromEntries((meta.rules || []).map(r => [r.id, r.grade])); return (data.cands || []).filter(c => c.rules.some(r => g[r] === 'A' || g[r] === 'B')).length; })()],
          ['aligned','📈 정배열', data.sections.map(x => x.items.length).join(' · ')],
-         ['exits','⛔ 이탈 경보', (data.exits || []).filter(i => i.level >= 2).length + ' / ' + (data.exits || []).length]]
+         ['exits','📉 조정 중', (data.exits || []).length]]
         .map(([k, l, n]) => `<button data-v="${k}" class="${state.view === k ? 'on' : ''}">${l}<b>${n}</b></button>`).join('')}
     </div>
     <div id="secs"></div>
     ${scoreTable(meta)}`;
   drawThermo(meta);
 
-  const body = () => state.view === 'early' ? renderEarly(data, meta)
+  const body = () => state.view === 'cands' ? renderCands(data, meta) : state.view === 'early' ? renderEarly(data, meta)
     : state.view === 'exits' ? renderExits(data, meta) : data.sections.map(renderSection).join('');
   const paint = () => {
     document.getElementById('secs').innerHTML = body();
     document.getElementById('sort').style.display = state.view === 'aligned' ? '' : 'none';
     const e2 = document.getElementById('e2');
     if (e2) e2.onchange = ev => { state.e2 = ev.target.checked; paint(); };
+    const ga = document.getElementById('gA');
+    if (ga) ga.onchange = ev => { state.gA = ev.target.checked; paint(); };
   };
   paint();
   document.getElementById('views').onclick = e => {
@@ -540,6 +606,105 @@ async function renderTrend(market) {
 function renderSoon(title) {
   panel().innerHTML = `<section><div class="empty"><b>${title}</b><br>다음 단계에서 추가됩니다.<br>묶음별 수익률 추이 차트 · 1개월/3개월/전체 · 변동률/종가 전환</div></section>`;
 }
+
+// ---------------------------------------------------------- 종목 차트 (▲ 상승 초입 · ▼ 하락 초입)
+async function openChart(ixId, code) {
+  const ix = INDEX[ixId];
+  let cd, meta;
+  try { [cd, meta] = await Promise.all([getJSON(ix.dir + 'charts.json'), getJSON(ix.dir + 'dates.json')]); }
+  catch { alertBox('차트 데이터가 아직 없습니다. 데이터 갱신을 한 번 실행해 주세요.'); return; }
+  const st = cd.stocks[code];
+  if (!st) { alertBox('이 종목의 차트 데이터가 없습니다.'); return; }
+  const rname = Object.fromEntries((meta.rules || []).map(r => [r.id, r.name]));
+  const wname = Object.fromEntries(((meta.defs || {}).exits || []).map(d => [d.id, d.name]));
+  const G = cd.grades || {}, rank = { A: 0, B: 1, C: 2 };
+  const best = rs => rs.map(r => G[r] || 'C').sort((a, b) => rank[a] - rank[b])[0];
+  const c = st.c, P = cd.pad, N = c.length;
+  const ma = n => c.map((_, i) => { if (i < n - 1) return null; let s = 0; for (let k = i - n + 1; k <= i; k++) { if (c[k] == null) return null; s += c[k]; } return s / n; });
+  const m20 = ma(20), m60 = ma(60);
+  const lastClose = (() => { for (let i = N - 1; i >= 0; i--) if (c[i] != null) return c[i]; })();
+  // 결과: 다음 날 종가에 샀다고 보고 20일 뒤(아직 안 됐으면 오늘)까지
+  const after = i => { const j0 = i + 1; if (j0 >= N || c[j0] == null) return null; const j1 = Math.min(N - 1, j0 + 20);
+    return { r: (c[j1] / c[j0] - 1) * 100, d: j1 - j0 }; };
+  const marks = [...st.b.map(([i, rs]) => ({ i, up: true, rs, g: best(rs) })), ...st.x.map(([i, ws]) => ({ i, up: false, ws }))]
+    .sort((a, b) => b.i - a.i);
+  const sl = a => a.slice(P);
+  const labels = sl(cd.dates).map(d => d.slice(5));
+  const pts = (up, g) => { const arr = new Array(N).fill(null);
+    marks.filter(m => m.up === up && (!up || (g === 'C' ? m.g === 'C' : m.g !== 'C'))).forEach(m => { if (c[m.i] != null) arr[m.i] = c[m.i] * (up ? 0.96 : 1.04); });
+    return sl(arr); };
+  const upC = css('--up'), dnC = css('--dn'), mut = css('--muted');
+  const fmtP = v => v == null ? '-' : v >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(2);
+  const rows = marks.filter(m => m.i >= P).map(m => {
+    const a = after(m.i);
+    const res = a ? `${pctS(a.r)}<br><span class="tag">${a.d}일 ${a.d < 20 ? '(진행 중)' : '후'}</span>` : '<span class="tag">내일부터</span>';
+    const what = m.up
+      ? `<span class="${m.g === 'C' ? 'tri-off' : 'tri-up'}">▲ 상승 초입</span> ${m.rs.map(r => `<span class="chip ${G[r] || 'C'}">${r} ${esc(rname[r] || '')} · ${G[r] || 'C'}</span>`).join('')}`
+      : `<span class="tri-dn">▼ 하락 초입 경고</span> ${m.ws.map(w => `<span class="chip r">${esc(wname[w] || w)}</span>`).join('')}`;
+    return `<tr><td class="num" style="vertical-align:top">${cd.dates[m.i].slice(2)}</td><td>${what}</td><td class="num">${res}</td></tr>`;
+  }).join('');
+  const box = document.createElement('div');
+  box.className = 'modal';
+  box.innerHTML = `<div class="box" role="dialog" aria-label="${esc(st.n)} 차트">
+    <div class="top"><h2>${esc(st.n)}</h2><span class="tag">${code} · ${fmtP(lastClose)}원</span>
+      <button class="x" type="button">닫기</button></div>
+    <div class="legend" style="margin-top:8px">
+      <span><span class="tri-up">▲</span> 상승 초입 (A·B등급 규칙)</span><span><span class="tri-off">△</span> 등급 미달 규칙</span>
+      <span><span class="tri-dn">▼</span> 하락 초입 경고 (경보 2개 이상)</span>
+      <span><i style="background:${COLORS[1]}"></i>20일선</span><span><i style="background:${COLORS[3]}"></i>60일선</span></div>
+    <div class="stock-chart"><canvas id="sc"></canvas></div>
+    <div class="note">신호는 장 마감 후 확정되므로 <b>표시된 날 다음 날</b>이 실제 진입·대응 시점입니다. 수익은 다음 날 종가 기준입니다.</div>
+    ${rows ? `<table class="mk" style="margin-top:8px"><thead><tr><th class="num">날짜</th><th>신호</th><th class="num">이후 수익</th></tr></thead><tbody>${rows}</tbody></table>`
+           : '<div class="empty">최근 6개월 동안 신호가 없었습니다.</div>'}
+    <div class="note" style="margin-top:10px">⚠️ ▼는 <b>매도 신호가 아닙니다.</b> 5년 검증에서 이 경고에 기계적으로 팔면 이후 반등해 오히려 손해인 경우가 많았습니다.
+      손실을 줄이려면 ‘산 가격 대비 −8%면 판다’처럼 <b>미리 정한 손절 규칙</b>이 더 확실합니다. ▼는 그 점검 시점으로 쓰세요.</div>
+    <div style="margin-top:12px"><a class="name" href="${fnguide(code)}" target="_blank" rel="noopener">FnGuide 기업정보 열기 ↗</a></div>
+  </div>`;
+  document.body.appendChild(box);
+  let chart;
+  const close = () => { if (chart) chart.destroy(); box.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  box.onclick = e => { if (e.target === box || e.target.closest('.x')) close(); };
+  if (!window.Chart) return;
+  const mk = (label, data, color, style, rot, fill) => ({ type: 'line', label, data, showLine: false, pointStyle: style, rotation: rot,
+    pointRadius: 7, pointHoverRadius: 9, borderColor: color, backgroundColor: fill ? color : 'transparent', borderWidth: 2, order: 0 });
+  chart = new Chart(box.querySelector('#sc'), { type: 'line',
+    data: { labels, datasets: [
+      { label: '종가', data: sl(c), borderColor: css('--text'), backgroundColor: css('--text'), borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 3, tension: 0.1, order: 2, spanGaps: true },
+      { label: '20일선', data: sl(m20), borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      { label: '60일선', data: sl(m60), borderColor: COLORS[3], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      mk('▲ 상승 초입', pts(true, 'AB'), upC, 'triangle', 0, true),
+      mk('△ 등급 미달', pts(true, 'C'), mut, 'triangle', 0, false),
+      mk('▼ 하락 초입 경고', pts(false), dnC, 'triangle', 180, true),
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'),
+        borderColor: css('--line'), borderWidth: 1,
+        filter: it => it.raw != null && !(it.datasetIndex >= 3 && it.raw == null),
+        callbacks: { label: it => {
+          const i = it.dataIndex + P;
+          if (it.datasetIndex === 0) return ` 종가 ${fmtP(it.raw)}`;
+          if (it.datasetIndex < 3) return ` ${it.dataset.label} ${fmtP(it.raw)}`;
+          const m = marks.find(x => x.i === i && x.up === (it.datasetIndex < 5));
+          if (!m) return '';
+          return m.up ? ` ▲ ${m.rs.map(r => `${r}(${G[r] || 'C'})`).join(', ')}` : ` ▼ ${m.ws.map(w => wname[w] || w).join(', ')}`;
+        } } } },
+      scales: { x: { ticks: { color: css('--muted'), maxTicksLimit: 6, maxRotation: 0 }, grid: { color: css('--grid') } },
+                y: { ticks: { color: css('--muted'), callback: v => fmtP(v) }, grid: { color: css('--grid') } } } } });
+}
+function alertBox(msg) {
+  const b = document.createElement('div'); b.className = 'modal';
+  b.innerHTML = `<div class="box"><div class="empty">${esc(msg)}</div><button class="x" type="button">닫기</button></div>`;
+  b.onclick = e => { if (e.target === b || e.target.closest('.x')) b.remove(); };
+  document.body.appendChild(b);
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('a.name[data-code]');
+  if (!a || !INDEX[state.tab] || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  openChart(state.tab, a.dataset.code);
+});
 
 // ---------------------------------------------------------- 공통
 async function render() {
