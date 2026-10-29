@@ -106,7 +106,32 @@
   details > summary h2::after { content: ' ▾'; color: var(--muted); font-size: 14px; }
   details[open] > summary h2::after { content: ' ▴'; }
   .sc td, .sc th { padding: 7px 4px; font-size: 13px; }
-  @media (max-width: 520px) { .sector-col { display: none; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
+  .sc td:first-child { white-space: nowrap; }
+  .chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 5px; margin: 2px 4px 0 0;
+          border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: var(--tab-on); }
+  .chip.w { border-color: var(--notice-text); color: var(--notice-text); background: var(--notice-bg); }
+  .chip.r { border-color: var(--red); color: var(--red); }
+  .dots { letter-spacing: 1px; color: var(--accent); white-space: nowrap; }
+  .dots .off { color: var(--line); }
+  .lvl { display: inline-block; min-width: 22px; text-align: center; border-radius: 6px; padding: 2px 6px; font-weight: 700; font-size: 12px; }
+  .lvl.l1 { background: var(--notice-bg); color: var(--notice-text); }
+  .lvl.l2 { background: var(--red); color: #fff; }
+  .alert { border-radius: 12px; padding: 12px 14px; margin-top: 14px; font-size: 14px; line-height: 1.5; border: 1px solid; }
+  .alert b { display: block; margin-bottom: 2px; }
+  .alert.danger { background: rgba(214,54,59,0.10); border-color: var(--red); }
+  .alert.warn { background: var(--notice-bg); border-color: var(--notice-text); color: var(--notice-text); }
+  .alert.good { background: var(--green-bg); border-color: var(--green); }
+  .views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+  .views button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px;
+                  font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .views button b { display: block; font-size: 20px; color: var(--text); margin-top: 2px; }
+  .views button.on { border-color: var(--accent); background: var(--tab-on); color: var(--text); font-weight: 600; }
+  .defs { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .defs b { color: var(--text); }
+  .sub-h { font-size: 14px; font-weight: 700; margin: 16px 0 4px; }
+  .toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
 <body>
@@ -132,7 +157,7 @@ const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
 };
-const state = { tab: 'kospi200', sort: 'days', q: '', date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const state = { tab: 'kospi200', sort: 'days', q: '', view: 'early', e2: true, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
 const PALETTE = {
   light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
   dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
@@ -206,7 +231,7 @@ function renderSection(s, idx) {
       <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
       <span class="count">${q ? items.length + ' / ' : ''}${s.items.length}종목</span></div>
     ${chips.length ? `<div class="changes">${chips.join('')}</div>` : '<div style="height:12px"></div>'}
-    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">점수</th><th class="num">시가총액</th></tr></thead>
+    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">추세강도</th><th class="num">시가총액</th></tr></thead>
       <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
   </section>`;
 }
@@ -250,22 +275,77 @@ function drawThermo(meta) {
 }
 
 // 신호 성적표
+const pctS = v => v == null ? '<span class="tag">-</span>' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+const matchQ = it => { const q = state.q.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q) || (it.sector || '').toLowerCase().includes(q) || it.code.includes(q); };
+const nameCell = it => `<a class="name" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>`;
+const alignTag = it => it.aligned && it.aligned.length
+  ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
+
+function renderEarly(data, meta) {
+  const names = Object.fromEntries((meta.defs ? meta.defs.early : []).map(d => [d.id, d.name]));
+  let items = (data.early || []).filter(matchQ);
+  const total = items.length;
+  if (state.e2) items = items.filter(it => it.escore >= 2);
+  const dots = n => `<span class="dots">${'●'.repeat(n)}<span class="off">${'●'.repeat(4 - n)}</span></span>`;
+  return `<section>
+    <div class="sec-head"><h2>🚀 초입 후보</h2><span class="count">${items.length} / ${total}종목</span></div>
+    <div class="note" style="margin:6px 0 10px">정배열이 완성되기 <b>전</b>에 나타나는 신호(최근 ${3}거래일). 신호가 겹칠수록 ●가 많습니다.
+      <label class="toggle"><input type="checkbox" id="e2" ${state.e2 ? 'checked' : ''}> 신호 2개 이상만</label></div>
+    ${items.length ? `<table><thead><tr><th>종목 · 켜진 신호</th><th class="sector-col">섹터</th><th class="num">초입</th><th class="num">상대강도</th><th class="num">시가총액</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${nameCell(it)}<br>${it.signals.map(x => `<span class="chip on">${x} ${names[x] || ''}</span>`).join('')}${alignTag(it)}</td>
+        <td class="sector sector-col">${esc(it.sector)}</td><td class="num">${dots(it.escore)}</td>
+        <td class="num">${it.rs ?? '-'}</td><td class="num">${fmtCap(it.cap)}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
+    ${defsBlock(meta, 'early')}
+  </section>`;
+}
+
+function renderExits(data, meta) {
+  const names = Object.fromEntries((meta.defs ? meta.defs.exits : []).map(d => [d.id, d.name]));
+  const items = (data.exits || []).filter(matchQ);
+  return `<section>
+    <div class="sec-head"><h2>⛔ 이탈 경보</h2><span class="count">${items.length}종목</span></div>
+    <div class="note" style="margin:6px 0 10px">최근 5일 안에 정배열이었던 종목 중 <b>꺾이기 시작한 것</b>. 정배열이 완전히 깨지기(편출) 전에 미리 알려 줍니다.
+      <span class="lvl l1">1</span> 주의 · <span class="lvl l2">2+</span> 위험</div>
+    ${items.length ? `<table><thead><tr><th>종목 · 경보</th><th class="sector-col">섹터</th><th class="num">단계</th><th class="num">고점 대비</th><th class="num">시가총액</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${nameCell(it)}<br>${it.warns.map(w => `<span class="chip ${it.level >= 2 ? 'r' : 'w'}">${names[w] || w}${w === 'W1' && it.bigvol ? '·대량' : ''}</span>`).join('')}${it.aligned.length ? alignTag(it) : '<span class="chip">정배열 이탈</span>'}</td>
+        <td class="sector sector-col">${esc(it.sector)}</td><td class="num"><span class="lvl ${it.level >= 2 ? 'l2' : 'l1'}">${it.level}</span></td>
+        <td class="num">${pctS(it.dd)}</td><td class="num">${fmtCap(it.cap)}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">경보 없음</div>'}
+    ${defsBlock(meta, 'exits')}
+  </section>`;
+}
+
+function defsBlock(meta, key) {
+  if (!meta.defs) return '';
+  return `<details class="defs"><summary>신호 기준 보기 ▾</summary>${meta.defs[key].map(d => `<div><b>${d.id} ${esc(d.name)}</b> — ${esc(d.desc)}</div>`).join('')}</details>`;
+}
+
 function scoreTable(meta) {
   const sc = meta.scorecard;
-  if (!sc) return '';
-  const pct = v => v == null ? '-' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
-  const rows = [['short','단기'],['mid','중기']].flatMap(([k, l]) => ['5','10','20'].map((h, i) => {
-    const r = sc[k] && sc[k][h];
-    return `<tr><td>${i === 0 ? `<b>${l}</b>` : ''}</td><td>${h}일 후</td>
-      ${r ? `<td class="num">${r.n}</td><td class="num">${pct(r.avg)}</td><td class="num">${r.win}%</td><td class="num">${pct(r.excess)}</td>`
-          : '<td class="num tag" colspan="4">자료 부족</td>'}</tr>`;
-  })).join('');
-  const from = (sc.short && sc.short.from) || '';
+  if (!sc || !sc.entries) return '';
+  const ent = sc.entries.map(e => {
+    const c = h => { const r = e.h[h]; return r ? `<td class="num">${pctS(r.excess)}<br><span class="tag">${r.win}% · ${r.n}건</span></td>` : '<td class="num tag">-</td>'; };
+    const g = r => r ? `${pctS(r.excess)}<span class="tag">(${r.n})</span>` : '<span class="tag">-</span>';
+    const early = !['short','mid'].includes(e.id);
+    return `<tr${early ? '' : ' style="opacity:.75"'}><td><b>${esc(e.name)}</b></td>${c('5').replace('<td class="num','<td class="h5 num')}${c('10')}${c('20')}<td class="num">${g(e.hot)}<br>${g(e.cold)}</td></tr>`;
+  }).join('');
+  const ex = sc.exits.map(e => e.n ? `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td>
+      <td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
+    : `<tr><td><b>${esc(e.name)}</b></td><td class="num tag" colspan="4">사례 없음</td></tr>`).join('');
+  const mk = sc.market.map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
   return `<section><details>
-    <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">정배열 신호가 실제로 맞았나</span></div></summary>
-    <div class="note" style="margin:10px 0">${from} 이후 정배열에 <b>새로 들어온 날 종가에 샀다고 가정</b>했을 때의 수익률입니다. "구성종목 평균 대비"가 +면 신호가 시장 평균보다 나았다는 뜻입니다. 수수료·세금 제외, 과거 성과가 미래를 보장하지 않습니다.</div>
-    <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th>보유</th><th class="num">건수</th><th class="num">평균 수익</th><th class="num">승률</th><th class="num">평균 대비</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+    <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">어떤 신호가 실제로 맞았나</span></div></summary>
+    <div class="note" style="margin:10px 0">${sc.from} 이후, 신호가 켜진 날 종가에 샀다고 가정했습니다. 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
+      <b>평균 대비</b>가 +면 같은 기간 구성종목 평균보다 나았다는 뜻입니다. 지금의 구성종목으로 계산해 실제보다 조금 좋게 나올 수 있고, 수수료·세금은 빠져 있습니다.</div>
+    <div class="sub-h">① 매수 신호 — 평균 대비 (아래: 승률 · 건수)</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th class="num h5">5일</th><th class="num">10일</th><th class="num">20일</th><th class="num">20일<br>강세/약세</th></tr></thead><tbody>${ent}</tbody></table></div>
+    <div class="note">강세장 = 단기 정배열 비율 50% 이상인 날 신호, 약세장 = 20% 이하인 날 신호. 흐린 두 줄은 비교용 기존 정배열 신호입니다.</div>
+    <div class="sub-h">② 이탈 경보 — 경보 뒤 20일</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
+    <div class="note">경보 종목 수익이 "경보 없는 정배열 종목"보다 낮을수록, 경보 때 판 것이 이득이었다는 뜻입니다.</div>
+    <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>
   </details></section>`;
 }
 
@@ -288,22 +368,41 @@ async function renderAlignment(ixId) {
       <label for="date">기준일</label>
       <select id="date">${meta.dates.map(d => `<option ${d === date ? 'selected' : ''}>${d}</option>`).join('')}</select>
       <div class="seg" id="sort">
-        ${[['days','연속일순'],['score','품질점수순'],['cap','시가총액순'],['sector','섹터별 묶기']].map(([k, l]) =>
+        ${[['days','연속일순'],['score','추세강도순'],['cap','시가총액순'],['sector','섹터별 묶기']].map(([k, l]) =>
           `<button data-sort="${k}" class="${state.sort === k ? 'on' : ''}">${l}</button>`).join('')}
       </div>
       <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
-      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보<br>점수(0~100) = 이평선 간격·20일선 기울기·거래량 증가·52주 고점 근접도 종합 · 과열 = 20일선 대비 +${OVERHEAT}% 이상</div>
+      <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명 누르면 FnGuide 기업정보</div>
     </div>
+    ${(data.alerts || []).map(a => `<div class="alert ${a.kind}"><b>🚨 ${esc(a.title)}</b>${esc(a.desc)}</div>`).join('')}
     ${thermo(meta, ix)}
-    <div id="secs">${data.sections.map(renderSection).join('')}</div>
+    <div class="views" id="views">
+      ${[['early','🚀 초입 후보', (data.early || []).filter(i => i.escore >= 2).length],
+         ['aligned','📈 정배열', data.sections.map(x => x.items.length).join(' · ')],
+         ['exits','⛔ 이탈 경보', (data.exits || []).filter(i => i.level >= 2).length + ' / ' + (data.exits || []).length]]
+        .map(([k, l, n]) => `<button data-v="${k}" class="${state.view === k ? 'on' : ''}">${l}<b>${n}</b></button>`).join('')}
+    </div>
+    <div id="secs"></div>
     ${scoreTable(meta)}`;
   drawThermo(meta);
 
-  const qi = document.getElementById('q');
-  qi.oninput = e => {
-    state.q = e.target.value;
-    document.getElementById('secs').innerHTML = data.sections.map(renderSection).join('');
+  const body = () => state.view === 'early' ? renderEarly(data, meta)
+    : state.view === 'exits' ? renderExits(data, meta) : data.sections.map(renderSection).join('');
+  const paint = () => {
+    document.getElementById('secs').innerHTML = body();
+    document.getElementById('sort').style.display = state.view === 'aligned' ? '' : 'none';
+    const e2 = document.getElementById('e2');
+    if (e2) e2.onchange = ev => { state.e2 = ev.target.checked; paint(); };
   };
+  paint();
+  document.getElementById('views').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.view = b.dataset.v;
+    document.querySelectorAll('#views button').forEach(x => x.classList.toggle('on', x === b));
+    paint();
+  };
+  const qi = document.getElementById('q');
+  qi.oninput = e => { state.q = e.target.value; paint(); };
   document.getElementById('date').onchange = e => { state.date[ixId] = e.target.value; render(); };
   document.getElementById('sort').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;

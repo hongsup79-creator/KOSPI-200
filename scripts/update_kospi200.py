@@ -443,33 +443,188 @@ def breadth(price, sec_mask, full):
 
 
 HORIZONS = [5, 10, 20]
+START = 130          # 이평선(120일)이 안정된 뒤부터만 성적 계산
+
+# ---------------------------------------------------------------- 초입·이탈 신호
+# 기준값 (성적표를 보며 조정)
+SQUEEZE = 3.0        # 이평선 밀집: 5·20·60일선 간격(%) 이하
+VOL_MULT = 2.0       # 거래량 급증: 20일 평균의 몇 배
+HOT = 15.0           # 과열: 20일선 대비 이격도(%)
+DRAW = 8.0           # 고점 대비 하락(%)
+RECENT = 3           # 초입 신호를 '최근'으로 보는 거래일 수
+COOLDOWN = 20        # 같은 종목의 같은 신호는 20거래일 안에 한 번만 셈
+
+EARLY = [
+    {"id": "A", "name": "밀집 돌파", "desc": f"5·20·60일선이 {SQUEEZE:g}% 안에 모였다가 종가가 셋 모두를 위로 돌파"},
+    {"id": "B", "name": "20일선 전환", "desc": "20일선(5일 기울기)이 하락에서 상승으로 바뀌고 종가가 20일선 위"},
+    {"id": "C", "name": "거래량 신고가", "desc": f"종가가 직전 60일 고점 돌파 + 거래량 20일 평균 {VOL_MULT:g}배 이상"},
+    {"id": "D", "name": "상대강도 개선", "desc": "20일 수익률 순위가 10일 전 하위 50%에서 상위 30%로 올라섬"},
+]
+EXITS = [
+    {"id": "W1", "name": "20일선 이탈", "desc": "종가가 20일선 아래 (거래량 1.5배 이상이면 ‘대량’ 표시)"},
+    {"id": "W2", "name": "단기 데드크로스", "desc": "5일선이 10일선 아래로"},
+    {"id": "W3", "name": "과열 후 꺾임", "desc": f"최근 10일 중 이격도 +{HOT:g}% 이상이었다가 3일 연속 축소"},
+    {"id": "W4", "name": f"고점 대비 −{DRAW:g}%", "desc": f"최근 20일 고점 대비 {DRAW:g}% 이상 하락"},
+]
 
 
-def scorecard(price, sec_streak):
-    """신호 성적표: 정배열에 새로 들어온 날 종가에 샀다고 가정한 이후 수익률"""
-    res = {}
+def _b(df):
+    return df.fillna(False).astype(bool)
+
+
+def recent(fire, n=RECENT):
+    return fire.astype(int).rolling(n, min_periods=1).max().fillna(0).astype(bool)
+
+
+def dedupe(fire, cooldown=COOLDOWN):
+    """같은 종목에서 cooldown 거래일 안에 다시 켜진 신호는 버림 (중복 집계 방지)"""
+    a = fire.to_numpy(dtype=bool)
+    out = np.zeros_like(a)
+    last = np.full(a.shape[1], -10 ** 9)
+    for i in range(len(a)):
+        hit = a[i] & (i - last > cooldown)
+        out[i] = hit
+        last[hit] = i
+    out[:START] = False
+    return pd.DataFrame(out, index=fire.index, columns=fire.columns)
+
+
+def compute_signals(price, vol, ma, gap20, sec_mask):
+    p = price
+    hi = np.fmax(np.fmax(ma[5], ma[20]), ma[60])
+    lo = np.fmin(np.fmin(ma[5], ma[20]), ma[60])
+    width = (hi / lo - 1) * 100
+    squeezed = recent(_b(width <= SQUEEZE), 5)
+    above = _b(p > hi)
+    A = squeezed.shift(1, fill_value=False) & above & ~above.shift(1, fill_value=False)
+
+    s5 = ma[20] / ma[20].shift(5) - 1
+    B = _b(s5 > 0) & _b(s5.shift(1) <= 0) & _b(p > ma[20])
+
+    vavg = vol.shift(1).rolling(20, min_periods=10).mean()
+    prior_hi = p.shift(1).rolling(60, min_periods=40).max()
+    C = _b(p > prior_hi) & _b(vol >= VOL_MULT * vavg)
+
+    rk = (p / p.shift(20) - 1).rank(axis=1, pct=True)
+    d_state = _b(rk >= 0.7) & _b(rk.shift(10) <= 0.5)
+    D = d_state & ~d_state.shift(1, fill_value=False)
+
+    fires = {"A": A, "B": B, "C": C, "D": D}
+    active = {k: recent(v) for k, v in fires.items()}
+    escore = sum(v.astype(int) for v in active.values())
+
+    W1 = _b(p < ma[20])
+    W1vol = W1 & _b(vol >= 1.5 * vavg)
+    W2 = _b(ma[5] < ma[10])
+    W3 = (_b(gap20.rolling(10, min_periods=3).max() >= HOT) & _b(gap20 < gap20.shift(1))
+          & _b(gap20.shift(1) < gap20.shift(2)) & _b(gap20.shift(2) < gap20.shift(3)))
+    hi20 = p.rolling(20, min_periods=10).max()
+    W4 = _b(p <= hi20 * (1 - DRAW / 100))
+    warns = {"W1": W1, "W2": W2, "W3": W3, "W4": W4}
+    wcount = sum(v.astype(int) for v in warns.values())
+    aligned_any = sec_mask["short"] | sec_mask["mid"]
+    was_aligned = recent(aligned_any, 5)          # 최근 5일 안에 정배열이었던 종목
+    dd20 = (p / hi20 - 1) * 100
+    return {"fires": fires, "active": active, "escore": escore, "rk": rk,
+            "warns": warns, "W1vol": W1vol, "wcount": wcount, "was_aligned": was_aligned,
+            "aligned_any": aligned_any, "dd20": dd20}
+
+
+def market_series(price, sec_mask):
+    valid = price.notna().sum(axis=1).replace(0, np.nan)
+    short = sec_mask["short"].sum(axis=1) / valid * 100
+    ew = (price / price.shift(1)).mean(axis=1).fillna(1).cumprod()   # 동일가중 지수
+    return short, ew
+
+
+def regime_flags(short, ew):
+    d5 = short - short.shift(5)
+    crash = d5 <= -20
+    hollow = (ew >= ew.rolling(20, min_periods=10).max() * 0.98) & \
+             (short <= short.rolling(20, min_periods=10).max() - 15)
+    rebound = (short.rolling(10, min_periods=5).min() <= 20) & (d5 >= 15)
+    return {"crash": crash.fillna(False), "hollow": hollow.fillna(False), "rebound": rebound.fillna(False)}
+
+
+REGIME_TEXT = {
+    "crash": ("danger", "급랭 경보", "단기 정배열 비율이 5일 만에 20%p 이상 줄었습니다. 신규 진입을 멈추고 보유 종목 점검."),
+    "hollow": ("warn", "속 빈 상승", "지수는 고점 근처인데 정배열 종목은 줄고 있습니다. 상승이 소수 종목에 쏠린 상태."),
+    "rebound": ("good", "바닥 회복 신호", "정배열 비율이 바닥(20% 이하)에서 5일 만에 15%p 이상 반등. 상승 초기일 수 있음."),
+}
+
+
+def _stats(r, ex=None):
+    keep = ~np.isnan(r) if ex is None else (~np.isnan(r) & ~np.isnan(ex))
+    r = r[keep]
+    if r.size == 0:
+        return None
+    out = {"n": int(r.size), "avg": _r(r.mean(), 2), "win": _r((r > 0).mean() * 100)}
+    if ex is not None:
+        e = ex[keep]
+        out.update({"excess": _r(e.mean(), 2), "beat": _r((e > 0).mean() * 100)})
+    return out
+
+
+def scorecard(price, sec_streak, sig, short, ew, regime):
     fwd = {h: (price.shift(-h) / price - 1) * 100 for h in HORIZONS}
-    bench = {h: fwd[h].mean(axis=1) for h in HORIZONS}   # 같은 기간 구성종목 평균
-    for k, st in sec_streak.items():
-        entry = (st == 1)
-        # 이평선이 처음 계산되는 구간의 가짜 신호 제외 (최소 120일 이후만)
-        entry.iloc[:130] = False
-        row = {}
+    bench = {h: fwd[h].mean(axis=1) for h in HORIZONS}
+    exc = {h: fwd[h].sub(bench[h], axis=0) for h in HORIZONS}
+    hot = (short >= 50).to_numpy()[:, None]
+    cold = (short <= 20).to_numpy()[:, None]
+
+    def entry_row(sid, name, events):
+        row = {"id": sid, "name": name, "h": {}}
         for h in HORIZONS:
-            # NaN(아직 h일이 안 지난 신호 등)은 반드시 제외 — pandas 버전에 따라 stack()이 NaN을 남김
-            r = fwd[h].where(entry).to_numpy().ravel()
-            ex = fwd[h].sub(bench[h], axis=0).where(entry).to_numpy().ravel()
-            keep = ~np.isnan(r) & ~np.isnan(ex)
-            r, ex = r[keep], ex[keep]
-            if r.size == 0:
-                row[str(h)] = None
-                continue
-            row[str(h)] = {"n": int(r.size), "avg": _r(r.mean(), 2), "win": _r((r > 0).mean() * 100),
-                           "excess": _r(ex.mean(), 2), "beat": _r((ex > 0).mean() * 100)}
-        first = price.index[130] if len(price) > 130 else price.index[0]
-        row["from"] = first.strftime("%Y-%m-%d")
-        res[k] = row
-    return res
+            row["h"][str(h)] = _stats(fwd[h].where(events).to_numpy().ravel(),
+                                      exc[h].where(events).to_numpy().ravel())
+        ev = events.to_numpy(dtype=bool)
+        r20, e20 = fwd[20].to_numpy(), exc[20].to_numpy()
+        row["hot"] = _stats(np.where(ev & hot, r20, np.nan).ravel(), np.where(ev & hot, e20, np.nan).ravel())
+        row["cold"] = _stats(np.where(ev & cold, r20, np.nan).ravel(), np.where(ev & cold, e20, np.nan).ravel())
+        return row
+
+    entries = [entry_row("short", "단기 정배열 신규", dedupe(sec_streak["short"] == 1)),
+               entry_row("mid", "중기 정배열 신규", dedupe(sec_streak["mid"] == 1))]
+    for e in EARLY:
+        entries.append(entry_row(e["id"], f"{e['id']}. {e['name']}", dedupe(sig["fires"][e["id"]])))
+    es = sig["escore"]
+    entries.append(entry_row("E2", "초입 점수 2 이상", dedupe((es >= 2) & (es.shift(1) < 2))))
+
+    # 이탈 경보 효과: 경보 뜬 정배열 종목 vs 같은 날 경보 없는 정배열 종목
+    fmin = price.iloc[::-1].rolling(20, min_periods=20).min().iloc[::-1].shift(-1)
+    dd_next = ((fmin / price - 1) * 100).to_numpy()
+    r20 = fwd[20].to_numpy()
+    base = sig["was_aligned"].to_numpy(dtype=bool)
+    ctrl = sig["aligned_any"].to_numpy(dtype=bool) & (sig["wcount"].to_numpy() == 0)
+    ctrl[:START] = False
+    ctrl_ret = np.nanmean(np.where(ctrl, r20, np.nan))
+    ctrl_dd = np.nanmean(np.where(ctrl, dd_next, np.nan))
+    exits = []
+    defs = [(w["id"], w["name"], sig["warns"][w["id"]]) for w in EXITS] + \
+           [("L2", "경보 2개 이상", sig["wcount"] >= 2)]
+    for wid, name, m in defs:
+        ev = dedupe(m & ~m.shift(1, fill_value=False)).to_numpy(dtype=bool) & base
+        r, dd = np.where(ev, r20, np.nan).ravel(), np.where(ev, dd_next, np.nan).ravel()
+        k = ~np.isnan(r) & ~np.isnan(dd)
+        if k.sum() == 0:
+            exits.append({"id": wid, "name": name, "n": 0})
+            continue
+        exits.append({"id": wid, "name": name, "n": int(k.sum()), "ret20": _r(r[k].mean(), 2),
+                      "dd20": _r(dd[k].mean(), 2), "ctrl20": _r(ctrl_ret, 2), "ctrl_dd": _r(ctrl_dd, 2)})
+
+    # 국면 경보 효과: 경보 다음 20일 구성종목 평균(동일가중) 수익률
+    ew20 = ((ew.shift(-20) / ew - 1) * 100)
+    all20 = ew20.iloc[START:].mean()
+    market = []
+    for k, flag in regime.items():
+        f = flag.copy()
+        f.iloc[:START] = False
+        ev = f & ~f.shift(1, fill_value=False)
+        v = ew20[ev].dropna()
+        market.append({"id": k, "name": REGIME_TEXT[k][1], "n": int(v.size),
+                       "ret20": _r(v.mean(), 2) if v.size else None, "all20": _r(all20, 2)})
+    first = price.index[START] if len(price) > START else price.index[0]
+    return {"from": first.strftime("%Y-%m-%d"), "entries": entries, "exits": exits, "market": market}
 
 
 def build(ix, price, vol, info, source, demo, updated):
@@ -489,6 +644,10 @@ def build(ix, price, vol, info, source, demo, updated):
     hi52 = price / price.rolling(250, min_periods=120).max()        # 52주 고점 대비
     parts = [spread, slope20, volr, hi52]
     score = sum(p.rank(axis=1, pct=True) for p in parts) / len(parts) * 100
+
+    sig = compute_signals(price, vol, ma, gap20, sec_mask)
+    mshort, ew = market_series(price, sec_mask)
+    regime = regime_flags(mshort, ew)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dates = list(price.index[-SNAPSHOT_DAYS:])
@@ -511,8 +670,32 @@ def build(ix, price, vol, info, source, demo, updated):
                               "dropped": dropped})
             for it in items:
                 flow[s["id"]].setdefault(it["sector"], [0] * len(dates))[di] += 1
+        # 초입 후보: 최근 3일 안에 켜진 초입 신호가 하나 이상
+        es = sig["escore"].loc[d]
+        early = []
+        for t in es[es >= 1].index:
+            early.append({"code": t, **info[t], "escore": int(es[t]),
+                          "signals": [e["id"] for e in EARLY if sig["active"][e["id"]].loc[d, t]],
+                          "rs": _r(sig["rk"].loc[d, t] * 100, 0), "gap": _r(gap20.loc[d, t]),
+                          "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
+        # 아직 단기 정배열이 아닌(진짜 초입) 종목을 위로
+        early.sort(key=lambda x: (-x["escore"], "short" in x["aligned"], -(x["rs"] or 0)))
+        # 이탈 경보: 최근 5일 안에 정배열이었던 종목 중 경보가 켜진 것
+        wc = sig["wcount"].loc[d]
+        wa = sig["was_aligned"].loc[d]
+        exits = []
+        for t in wc[(wc >= 1) & wa].index:
+            exits.append({"code": t, **info[t], "level": int(wc[t]),
+                          "warns": [w["id"] for w in EXITS if sig["warns"][w["id"]].loc[d, t]],
+                          "bigvol": bool(sig["W1vol"].loc[d, t]), "gap": _r(gap20.loc[d, t]),
+                          "dd": _r(sig["dd20"].loc[d, t]),
+                          "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
+        exits.sort(key=lambda x: (-x["level"], x["dd"] if x["dd"] is not None else 0))
+        alerts = [{"kind": REGIME_TEXT[k][0], "title": REGIME_TEXT[k][1], "desc": REGIME_TEXT[k][2]}
+                  for k, f in regime.items() if bool(f.loc[d])]
         out = {"date": d.strftime("%Y-%m-%d"), "updated": updated, "index": ix["name"],
-               "universe": len(info), "source": source, "demo": demo, "sections": sections}
+               "universe": len(info), "source": source, "demo": demo, "sections": sections,
+               "early": early[:60], "exits": exits[:60], "alerts": alerts}
         (out_dir / f"{out['date']}.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
 
     keep = {d.strftime("%Y-%m-%d") for d in dates}
@@ -520,7 +703,9 @@ def build(ix, price, vol, info, source, demo, updated):
         if f.stem not in keep:
             f.unlink()
     meta = {"dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
-            "breadth": breadth(price, sec_mask, full), "scorecard": scorecard(price, sec_streak)}
+            "breadth": breadth(price, sec_mask, full),
+            "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),
+            "defs": {"early": EARLY, "exits": EXITS}}
     (out_dir / "dates.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
 
     universe = {}
@@ -529,7 +714,9 @@ def build(ix, price, vol, info, source, demo, updated):
     print(f"  저장 완료: {out_dir.name} (최신 {meta['dates'][0]})")
     last = sections  # 가장 최근 기준일의 섹션 (루프 마지막)
     b = meta["breadth"]
-    summary = {"name": ix["name"], "date": meta["dates"][0],
+    summary = {"early": [e for e in early if e["escore"] >= 2 and not e["aligned"]],
+               "exits": [e for e in exits if e["level"] >= 2], "alerts": alerts,
+               "name": ix["name"], "date": meta["dates"][0],
                "short": b["short"][-1], "short5": b["short"][-1] - b["short"][-6] if len(b["short"]) > 5 else 0,
                "sections": [{"title": x["title"],
                              "count": len(x["items"]),
@@ -615,6 +802,14 @@ def telegram_text(summaries):
         mood = ("🔥 추세 확산" if sm["short"] >= 50 and d >= 0 else "⚠️ 확산 둔화" if sm["short"] >= 50
                 else "🌱 회복 중" if d > 0 else "❄️ 약세")
         lines.append(f"\n<b>[{sm['name']}]</b> 단기 정배열 {sm['short']:.0f}% (5일 {d:+.1f}%p) {mood}")
+        for a in sm.get("alerts", []):
+            lines.append(f"  🚨 {a['title']}")
+        if sm.get("early"):
+            import html as _h
+            lines.append("  🚀 초입 후보: " + ", ".join(
+                _h.escape(f"{e['name']}({'+'.join(e['signals'])})") for e in sm["early"][:6]))
+        if sm.get("exits"):
+            lines.append(f"  ⛔ 이탈 경보(2개↑): {names(sm['exits'])}")
         for sec in sm["sections"]:
             lines.append(f"· {sec['title']} {sec['count']}종목")
             lines.append(f"  🆕 편입: {names(sec['new'], with_score=True)}")
