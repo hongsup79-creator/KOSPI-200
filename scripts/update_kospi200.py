@@ -45,7 +45,7 @@ SECTIONS = [
     {"id": "mid", "title": "중기 정배열", "mas": [20, 60, 120]},
 ]
 FULL_MAS = [5, 10, 20, 60, 120]
-HISTORY_DAYS = 500   # 약 2년 (120일선 + 신호 성적표 검증 기간)
+HISTORY_DAYS = 1250  # 약 5년 (하락장이 포함되도록; 120일선 + 신호 성적표 검증 기간)
 SNAPSHOT_DAYS = 20
 
 INDEXES = [
@@ -553,7 +553,23 @@ REGIME_TEXT = {
 }
 
 
-def _stats(r, ex=None):
+SIG_T = 2.0         # 월별로 묶은 t값이 이 이상이면 '우연으로 보기 어려운 차이'
+MIN_MONTHS = 12
+
+
+def month_t(vals, months):
+    """같은 달의 신호끼리는 서로 닮았으므로(같은 장세), 달별 평균을 한 표본으로 보고 t값 계산.
+    종목 수만큼 표본을 세면 신뢰도가 과장되기 때문."""
+    if vals.size == 0:
+        return None, 0
+    df = pd.DataFrame({"v": vals, "m": months}).groupby("m")["v"].mean()
+    k = len(df)
+    if k < 3 or df.std(ddof=1) == 0:
+        return None, k
+    return float(df.mean() / (df.std(ddof=1) / np.sqrt(k))), k
+
+
+def _stats(r, ex=None, months=None):
     keep = ~np.isnan(r) if ex is None else (~np.isnan(r) & ~np.isnan(ex))
     r = r[keep]
     if r.size == 0:
@@ -562,6 +578,10 @@ def _stats(r, ex=None):
     if ex is not None:
         e = ex[keep]
         out.update({"excess": _r(e.mean(), 2), "beat": _r((e > 0).mean() * 100)})
+        if months is not None:
+            t, k = month_t(e, months[keep])
+            out.update({"t": _r(t, 1), "months": k,
+                        "sig": bool(t is not None and k >= MIN_MONTHS and abs(t) >= SIG_T)})
     return out
 
 
@@ -571,16 +591,29 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
     exc = {h: fwd[h].sub(bench[h], axis=0) for h in HORIZONS}
     hot = (short >= 50).to_numpy()[:, None]
     cold = (short <= 20).to_numpy()[:, None]
+    T, N = price.shape
+    mon_row = price.index.to_period("M").astype(str).to_numpy()
+    MON = np.repeat(mon_row[:, None], N, axis=1)
+    YEAR = np.repeat(price.index.year.to_numpy()[:, None], N, axis=1)
 
     def entry_row(sid, name, events):
         row = {"id": sid, "name": name, "h": {}}
-        for h in HORIZONS:
-            row["h"][str(h)] = _stats(fwd[h].where(events).to_numpy().ravel(),
-                                      exc[h].where(events).to_numpy().ravel())
         ev = events.to_numpy(dtype=bool)
+        for h in HORIZONS:
+            r, e = fwd[h].to_numpy(), exc[h].to_numpy()
+            row["h"][str(h)] = _stats(np.where(ev, r, np.nan).ravel(), np.where(ev, e, np.nan).ravel(), MON.ravel())
         r20, e20 = fwd[20].to_numpy(), exc[20].to_numpy()
-        row["hot"] = _stats(np.where(ev & hot, r20, np.nan).ravel(), np.where(ev & hot, e20, np.nan).ravel())
-        row["cold"] = _stats(np.where(ev & cold, r20, np.nan).ravel(), np.where(ev & cold, e20, np.nan).ravel())
+        row["hot"] = _stats(np.where(ev & hot, r20, np.nan).ravel(), np.where(ev & hot, e20, np.nan).ravel(), MON.ravel())
+        row["cold"] = _stats(np.where(ev & cold, r20, np.nan).ravel(), np.where(ev & cold, e20, np.nan).ravel(), MON.ravel())
+        # 연도별 20일 평균 대비 (일관성 확인용)
+        yr = {}
+        ee = np.where(ev, e20, np.nan)
+        for y in sorted(set(YEAR[ev].tolist())):
+            v = ee[(YEAR == y) & ev]
+            v = v[~np.isnan(v)]
+            if v.size >= 10:
+                yr[str(y)] = {"excess": _r(v.mean(), 2), "n": int(v.size)}
+        row["years"] = yr
         return row
 
     entries = [entry_row("short", "단기 정배열 신규", dedupe(sec_streak["short"] == 1)),
@@ -599,6 +632,8 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
     ctrl[:START] = False
     ctrl_ret = np.nanmean(np.where(ctrl, r20, np.nan))
     ctrl_dd = np.nanmean(np.where(ctrl, dd_next, np.nan))
+    # 달별 '경보 없는 정배열 종목' 평균 (같은 달끼리 비교)
+    cm = pd.Series(np.where(ctrl, r20, np.nan).ravel()).groupby(MON.ravel()).mean()
     exits = []
     defs = [(w["id"], w["name"], sig["warns"][w["id"]]) for w in EXITS] + \
            [("L2", "경보 2개 이상", sig["wcount"] >= 2)]
@@ -609,8 +644,15 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
         if k.sum() == 0:
             exits.append({"id": wid, "name": name, "n": 0})
             continue
+        wm = pd.Series(r[k]).groupby(MON.ravel()[k]).mean()
+        diff = (wm - cm.reindex(wm.index)).dropna()
+        t = None
+        if len(diff) >= 3 and diff.std(ddof=1) > 0:
+            t = float(diff.mean() / (diff.std(ddof=1) / np.sqrt(len(diff))))
         exits.append({"id": wid, "name": name, "n": int(k.sum()), "ret20": _r(r[k].mean(), 2),
-                      "dd20": _r(dd[k].mean(), 2), "ctrl20": _r(ctrl_ret, 2), "ctrl_dd": _r(ctrl_dd, 2)})
+                      "dd20": _r(dd[k].mean(), 2), "ctrl20": _r(ctrl_ret, 2), "ctrl_dd": _r(ctrl_dd, 2),
+                      "t": _r(t, 1), "months": int(len(diff)),
+                      "sig": bool(t is not None and len(diff) >= MIN_MONTHS and abs(t) >= SIG_T)})
 
     # 국면 경보 효과: 경보 다음 20일 구성종목 평균(동일가중) 수익률
     ew20 = ((ew.shift(-20) / ew - 1) * 100)
@@ -624,7 +666,9 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
         market.append({"id": k, "name": REGIME_TEXT[k][1], "n": int(v.size),
                        "ret20": _r(v.mean(), 2) if v.size else None, "all20": _r(all20, 2)})
     first = price.index[START] if len(price) > START else price.index[0]
-    return {"from": first.strftime("%Y-%m-%d"), "entries": entries, "exits": exits, "market": market}
+    return {"from": first.strftime("%Y-%m-%d"), "to": price.index[-1].strftime("%Y-%m-%d"),
+            "entries": entries, "exits": exits, "market": market,
+            "years": sorted({y for e in entries for y in e["years"]})}
 
 
 def build(ix, price, vol, info, source, demo, updated):

@@ -107,6 +107,10 @@
   details[open] > summary h2::after { content: ' ▴'; }
   .sc td, .sc th { padding: 7px 4px; font-size: 13px; }
   .sc td:first-child { white-space: nowrap; }
+  .sc tr.base { opacity: .8; }
+  .sc tr.yrs td { padding-top: 0; font-size: 11px; color: var(--muted); white-space: normal; border-bottom: 1px solid var(--line); }
+  .sc tr.yrs + tr td, .sc tr:has(+ tr.yrs) td { border-bottom: none; }
+  .yr { display: inline-block; margin-right: 8px; white-space: nowrap; }
   .chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 5px; margin: 2px 4px 0 0;
           border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .chip.on { border-color: var(--accent); color: var(--accent); background: var(--tab-on); }
@@ -324,26 +328,31 @@ function defsBlock(meta, key) {
 function scoreTable(meta) {
   const sc = meta.scorecard;
   if (!sc || !sc.entries) return '';
+  const mark = r => r && r.sig ? (r.excess > 0 ? ' <span title="우연으로 보기 어려운 차이">✅</span>' : ' <span title="우연으로 보기 어려운 차이(나쁜 쪽)">⚠️</span>') : '';
   const ent = sc.entries.map(e => {
-    const c = h => { const r = e.h[h]; return r ? `<td class="num">${pctS(r.excess)}<br><span class="tag">${r.win}% · ${r.n}건</span></td>` : '<td class="num tag">-</td>'; };
-    const g = r => r ? `${pctS(r.excess)}<span class="tag">(${r.n})</span>` : '<span class="tag">-</span>';
+    const c = h => { const r = e.h[h]; return r ? `<td class="num">${pctS(r.excess)}${mark(r)}<br><span class="tag">${r.win}% · ${r.n}건</span></td>` : '<td class="num tag">-</td>'; };
+    const g = r => r ? `${pctS(r.excess)}${mark(r)}<span class="tag">(${r.n})</span>` : '<span class="tag">-</span>';
     const early = !['short','mid'].includes(e.id);
-    return `<tr${early ? '' : ' style="opacity:.75"'}><td><b>${esc(e.name)}</b></td>${c('5').replace('<td class="num','<td class="h5 num')}${c('10')}${c('20')}<td class="num">${g(e.hot)}<br>${g(e.cold)}</td></tr>`;
+    const yrs = Object.entries(e.years || {}).map(([y, v]) => `<span class="yr">'${y.slice(2)} ${pctS(v.excess)}</span>`).join('');
+    return `<tr${early ? '' : ' class="base"'}><td><b>${esc(e.name)}</b></td>${c('5').replace('<td class="num','<td class="h5 num')}${c('10')}${c('20')}<td class="num">${g(e.hot)}<br>${g(e.cold)}</td></tr>
+      ${yrs ? `<tr class="yrs"><td colspan="5">연도별 20일: ${yrs}</td></tr>` : ''}`;
   }).join('');
   const ex = sc.exits.map(e => e.n ? `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td>
-      <td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
+      <td class="num">${pctS(e.ret20)}${e.sig ? (e.ret20 < e.ctrl20 ? ' ✅' : ' ⚠️') : ''}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
     : `<tr><td><b>${esc(e.name)}</b></td><td class="num tag" colspan="4">사례 없음</td></tr>`).join('');
   const mk = sc.market.map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
   return `<section><details>
     <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">어떤 신호가 실제로 맞았나</span></div></summary>
-    <div class="note" style="margin:10px 0">${sc.from} 이후, 신호가 켜진 날 종가에 샀다고 가정했습니다. 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
-      <b>평균 대비</b>가 +면 같은 기간 구성종목 평균보다 나았다는 뜻입니다. 지금의 구성종목으로 계산해 실제보다 조금 좋게 나올 수 있고, 수수료·세금은 빠져 있습니다.</div>
+    <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 날 종가에 샀다고 가정했습니다. 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
+      <b>평균 대비</b>가 +면 같은 기간 구성종목 평균보다 나았다는 뜻입니다. 지금의 구성종목으로 계산해 실제보다 조금 좋게 나올 수 있고, 수수료·세금은 빠져 있습니다.<br>
+      <b>✅ = 우연으로 보기 어려운 차이</b>(같은 달 신호끼리 묶어 계산한 t값 2 이상, 12개월 이상). ✅가 없는 숫자는 운일 수 있습니다. ⚠️는 반대로 확실히 나빴다는 뜻입니다.
+      연도별 숫자가 해마다 같은 방향이면 믿을 만한 신호입니다.</div>
     <div class="sub-h">① 매수 신호 — 평균 대비 (아래: 승률 · 건수)</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th class="num h5">5일</th><th class="num">10일</th><th class="num">20일</th><th class="num">20일<br>강세/약세</th></tr></thead><tbody>${ent}</tbody></table></div>
-    <div class="note">강세장 = 단기 정배열 비율 50% 이상인 날 신호, 약세장 = 20% 이하인 날 신호. 흐린 두 줄은 비교용 기존 정배열 신호입니다.</div>
+    <div class="note">강세장 = 단기 정배열 비율 50% 이상인 날 신호, 약세장 = 20% 이하인 날 신호. 위 두 줄(정배열 신규)은 비교 기준입니다.</div>
     <div class="sub-h">② 이탈 경보 — 경보 뒤 20일</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
-    <div class="note">경보 종목 수익이 "경보 없는 정배열 종목"보다 낮을수록, 경보 때 판 것이 이득이었다는 뜻입니다.</div>
+    <div class="note">경보 종목 수익이 "경보 없는 정배열 종목"보다 낮을수록, 경보 때 판 것이 이득이었다는 뜻입니다. ✅는 그 차이가 우연으로 보기 어렵다는 뜻입니다.</div>
     <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>
   </details></section>`;
