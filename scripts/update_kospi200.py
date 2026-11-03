@@ -508,9 +508,10 @@ def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
 
 
 def drop_intraday(df):
-    """장 마감(15:30) 전·직후에 실행되면 오늘 값은 장중 가격이므로 빼고 어제까지로 계산"""
+    """오늘 값이 아직 확정 전이면 빼고 어제까지로 계산.
+    네이버 차트 가격은 대체거래소(넥스트레이드) 애프터마켓(~20:00)까지 반영되어 20:00 이후에 확정됨"""
     now = datetime.now(KST)
-    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < (15, 40):
+    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < (20, 5):
         print(f"  장중 실행({now:%H:%M}) → 오늘({now:%m-%d}) 가격 제외, 어제 종가까지로 계산")
         return df.iloc[:-1]
     return df
@@ -632,6 +633,12 @@ def _b(df):
 
 def recent(fire, n=RECENT):
     return fire.astype(int).rolling(n, min_periods=1).max().fillna(0).astype(bool)
+
+
+def fresh(fire, n=None):
+    """화면 표시용 '새로 켜짐': 직전 며칠(CAND_DAYS) 안에 같은 신호가 없었던 날만 (성적 계산용 20일 쿨다운과 구분)"""
+    n = n or CAND_DAYS
+    return fire & ~recent(fire.shift(1, fill_value=False), n)
 
 
 def dedupe(fire, cooldown=COOLDOWN):
@@ -905,7 +912,7 @@ def grade_rules(price, fires, short=None, prev=None):
     exc = {lag: ret[lag].sub(ret[lag].mean(axis=1), axis=0).to_numpy() for lag in ret}
     out = []
     for rd in RULES:
-        ev = dedupe(fires[rd["id"]]).to_numpy(dtype=bool)
+        ev = (fires[rd["id"]] if rd["id"] == "V0" else dedupe(fires[rd["id"]])).to_numpy(dtype=bool)   # V0은 매달 1번이라 쿨다운 불필요
 
         def part(mask, lag=ENTRY_LAG):
             v = np.where(ev & mask, exc[lag], np.nan).ravel()
@@ -945,7 +952,7 @@ def grade_rules(price, fires, short=None, prev=None):
 FWD_HORIZONS = [5, 10, 20]
 
 
-def forward_log(ix_id, price, cands_today, today, gmap):
+def forward_log(ix_id, price, cands_today, today, gmap, rfires=None):
     """오늘의 A·B 후보(오늘 켜진 것만)를 종목당 하루 1건으로 기록해 두고, 이후 실제 성과를 매일 계산.
     규칙을 고를 때 본 적 없는 '미래' 데이터라서 가장 정직한 검증."""
     f = DATA / "forward" / f"{ix_id}.json"
@@ -965,11 +972,22 @@ def forward_log(ix_id, price, cands_today, today, gmap):
         if it.get("grade") == "A":
             m["grade"] = "A"
     items = sorted(merged.values(), key=lambda x: (x["date"], x["code"]))
+    # 기록 날짜에 실제로 켜진 규칙만 남김 (전날 켜진 규칙이 다음 날로 잘못 기록된 것 정리)
+    if rfires is not None:
+        fixed = []
+        for it in items:
+            dt = pd.Timestamp(it["date"])
+            if dt in price.index:
+                it["rules"] = [r for r in it["rules"] if r in rfires and it["code"] in rfires[r].columns
+                               and bool(rfires[r].loc[dt, it["code"]])]
+            if it["rules"]:
+                fixed.append(it)
+        items = fixed
     seen = {i["code"] for i in items if (pd.Timestamp(today) - pd.Timestamp(i["date"])).days < 30}
     for c in cands_today:
         if c.get("ago", 9) != 0 or c["code"] in seen:
             continue
-        rs = [r for r in c["rules"] if gmap.get(r) in ("A", "B")]
+        rs = [r for r in c.get("r0", c["rules"]) if gmap.get(r) in ("A", "B")]   # 오늘 켜진 규칙만
         if rs:
             items.append({"date": today, "code": c["code"], "name": c["name"], "rules": rs,
                           "grade": "A" if any(gmap[r] == "A" for r in rs) else "B"})
@@ -1017,7 +1035,7 @@ def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
     n = CHART_DAYS + CHART_PAD
     p = price.iloc[-n:]
     off = len(price) - len(p)
-    buys = {r: dedupe(f).to_numpy(dtype=bool) for r, f in rfires.items()}
+    buys = {r: fresh(f).to_numpy(dtype=bool) for r, f in rfires.items()}   # 🔔 그날 신호와 같은 기준
     lvl2 = _b(sig["wcount"] >= 2) & sig["was_aligned"]
     sell = dedupe(lvl2 & ~lvl2.shift(1, fill_value=False)).to_numpy(dtype=bool)
     ma60 = price.rolling(60, min_periods=60).mean()
@@ -1085,7 +1103,8 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
         prev = {}
     rgrades = grade_rules(price, rfires, mshort, None if demo else prev)
     gmap = {g["id"]: g["grade"] for g in rgrades}
-    ractive = {k: recent(v, CAND_DAYS) for k, v in rfires.items() if k != "V0"}   # V0는 비교 기준이라 후보에서 제외
+    ractive = {k: recent(v, CAND_DAYS) for k, v in rfires.items() if k != "V0"}
+    fresh_fires = {k: fresh(v) for k, v in rfires.items() if k != "V0"}   # V0는 비교 기준이라 후보에서 제외
 
     def vinfo(d, t):
         if val is None:
@@ -1141,9 +1160,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
         # 검증된 후보: 최근 5일 안에 규칙이 켜진 종목 (등급과 함께)
         # 그날 신호 (종목 옆 배지용): ▲ 그날 켜진 규칙, ▼/▽ 그날 처음 뜬 경고
         day_sig = {}
-        for rid, f in rfires.items():
-            if rid == "V0":
-                continue
+        for rid, f in fresh_fires.items():
             row = f.loc[d]
             for t in row[row].index:
                 day_sig.setdefault(t, {}).setdefault("u", []).append(rid)
@@ -1165,6 +1182,8 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
                 c = cands.setdefault(t, {"code": t, **info[t], **vinfo(d, t), "rules": [], "gap": _r(gap20.loc[d, t]), "ago": 9,
                                          "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
                 c["rules"].append(rid)
+                if bool(rfires[rid].loc[d, t]):
+                    c.setdefault("r0", []).append(rid)
                 fired = rfires[rid][t].iloc[max(0, pos - CAND_DAYS + 1):pos + 1].to_numpy()
                 hits = np.where(fired)[0]
                 if hits.size:
@@ -1196,7 +1215,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
         if f.stem not in keep:
             f.unlink()
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
-    fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap)
+    fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap, rfires)
     meta = {"regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
             "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),

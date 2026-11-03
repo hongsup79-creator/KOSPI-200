@@ -478,7 +478,7 @@ function scoreTable(meta) {
   const mk = sc.market.map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
   return `<section><details>
     <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">어떤 신호가 실제로 맞았나</span></div></summary>
-    <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 <b>다음 날 종가</b>에 샀다고 가정했습니다(신호는 장 마감 후에야 알 수 있으므로). 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다.
+    <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 <b>다음 날 종가</b>에 샀다고 가정했습니다(신호는 장 마감 후에야 알 수 있으므로). 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다. 가격은 네이버 통합 시세(정규장 + 넥스트레이드 애프터마켓, 오후 8시 확정)라 증권사 앱의 15:30 종가와 조금 다를 수 있습니다.
       <b>평균 대비</b>가 +면 같은 기간 구성종목 평균보다 나았다는 뜻입니다. 지금의 구성종목으로 계산해 실제보다 조금 좋게 나올 수 있고, 수수료·세금은 빠져 있습니다.<br>
       <b>✅ = 우연으로 보기 어려운 차이</b>(같은 달 신호끼리 묶어 계산한 t값 2 이상, 12개월 이상). ✅가 없는 숫자는 운일 수 있습니다. ⚠️는 반대로 확실히 나빴다는 뜻입니다.
       연도별 숫자가 해마다 같은 방향이면 믿을 만한 신호입니다.</div>
@@ -756,7 +756,7 @@ async function openChart(ixId, code) {
       <span><span class="tri-dn">▼</span> 하락 경고 (60일선 꺾임)</span><span><span class="tri-pull">▽</span> 눌림 (60일선 상승 중)</span>
       <span><i style="background:${COLORS[1]}"></i>20일선</span><span><i style="background:${COLORS[3]}"></i>60일선</span></div>
     <div class="stock-chart"><canvas id="sc"></canvas></div>
-    <div class="note">신호는 장 마감 후 확정되므로 <b>표시된 날 다음 날</b>이 실제 진입·대응 시점입니다. 수익은 다음 날 종가 기준입니다.</div>
+    <div class="note">신호는 장 마감 후 확정되므로 <b>표시된 날 다음 날</b>이 실제 진입·대응 시점입니다. 수익은 다음 날 종가 기준입니다. 차트 가격은 오후 8시 확정 통합 시세입니다.</div>
     ${rows ? `<table class="mk" style="margin-top:8px"><thead><tr><th class="num">날짜</th><th>신호</th><th class="num">이후 수익</th></tr></thead><tbody>${rows}</tbody></table>`
            : '<div class="empty">최근 6개월 동안 신호가 없었습니다.</div>'}
     ${stopBox(st, lastClose, fmtP)}
