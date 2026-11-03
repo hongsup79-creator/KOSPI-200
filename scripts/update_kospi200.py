@@ -340,6 +340,136 @@ def fetch_sectors():
         return {}
 
 
+# ---------------------------------------------------------------- 재무 (저평가 판단용)
+ROW_KEYS = {"eps": r"^\s*EPS", "bps": r"^\s*BPS", "roe": r"^\s*ROE"}
+
+
+def _num(v):
+    if isinstance(v, dict):
+        v = v.get("value", v.get("val"))
+    v = str(v if v is not None else "").replace(",", "").strip()
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def parse_annual(data):
+    """네이버 연간 재무 → {'202312': {'eps':..,'bps':..,'roe':..}} (실적만, 추정치 제외)"""
+    box = []
+
+    def walk(o):
+        if isinstance(o, dict):
+            if "rowList" in o and ("trTitleList" in o or "columnList" in o):
+                box.append(o)
+                return
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    walk(data)
+    if not box:
+        return {}
+    fi = box[0]
+    titles = fi.get("trTitleList") or fi.get("columnList") or []
+    actual = [str(t.get("key")) for t in titles
+              if isinstance(t, dict) and str(t.get("isConsensus", "N")).upper() != "Y" and t.get("key")]
+    out = {}
+    for row in fi.get("rowList") or []:
+        title = str(row.get("title", ""))
+        name = next((k for k, rx in ROW_KEYS.items() if re.match(rx, title)), None)
+        if not name:
+            continue
+        cols = row.get("columns") or {}
+        if isinstance(cols, list):
+            cols = {str(c.get("key")): c for c in cols if isinstance(c, dict)}
+        for key in actual:
+            v = _num(cols.get(key))
+            if v is not None and re.fullmatch(r"\d{6}", key):
+                out.setdefault(key, {})[name] = v
+    return out
+
+
+def fetch_fundamentals(codes):
+    """종목별 연간 EPS·BPS·ROE (7일마다 새로 받음, 실패한 종목만 다시 시도)"""
+    cached = load_cache("fund") or {}
+    fresh = load_cache("fund", max_age_days=7) is not None
+    data = dict(cached.get("data", {})) if fresh else {}
+    todo = [c for c in codes if not data.get(c)]
+    first_err = []
+
+    def one(c):
+        try:
+            d = _get(f"https://m.stock.naver.com/api/stock/{c}/finance/annual")
+            r = parse_annual(d)
+            if not r and not first_err:
+                first_err.append(f"{c} 형식: {json.dumps(d, ensure_ascii=False)[:300]}")
+            return r
+        except Exception as e:
+            if not first_err:
+                first_err.append(f"{c}: {str(e)[:150]}")
+            return {}
+    for c, r in zip(todo, pmap(one, todo)):
+        if r:
+            data[c] = r
+        elif cached.get("data", {}).get(c):
+            data[c] = cached["data"][c]          # 실패하면 예전 값이라도
+    got = sum(1 for c in codes if data.get(c))
+    print(f"  재무 {got}/{len(codes)}개 (새로 받음 {len(todo)}개)")
+    if first_err:
+        print(f"  재무 첫 실패: {first_err[0]}")
+    if got:
+        save_cache("fund", {"data": data})
+    return {c: data[c] for c in codes if data.get(c)}
+
+
+def demo_fund(price, rng):
+    out = {}
+    for c in price.columns:
+        eps0, bps0, roe0 = rng.uniform(1500, 8000), rng.uniform(20000, 90000), rng.uniform(-3, 20)
+        out[c] = {f"{y}12": {"eps": round(eps0 * rng.uniform(0.6, 1.4)), "bps": round(bps0 * (1 + 0.05 * (y - 2020))),
+                             "roe": round(roe0 + rng.normal(0, 3), 1)} for y in range(2020, 2026)}
+    return out
+
+
+VAL_ROE = 5.0      # 최소 수익성(ROE %): 너무 낮으면 '싼 이유가 있는' 종목으로 봄
+
+
+def value_panel(price, info, fund):
+    """그날 알 수 있었던 재무만으로 PER·PBR·ROE를 매일 계산 (결산 후 3개월 뒤부터 반영)"""
+    if not fund:
+        return None
+    eps = pd.DataFrame(np.nan, index=price.index, columns=price.columns)
+    bps, roe = eps.copy(), eps.copy()
+    for c, years in fund.items():
+        if c not in price.columns:
+            continue
+        for key in sorted(years):
+            y, m = int(key[:4]), int(key[4:])
+            avail = pd.Timestamp(year=y, month=m, day=1) + pd.DateOffset(months=4)   # 12월 결산 → 다음 해 4월 1일부터
+            v = years[key]
+            for df, k in ((eps, "eps"), (bps, "bps"), (roe, "roe")):
+                if v.get(k) is not None:
+                    df.loc[df.index >= avail, c] = v[k]
+    per = (price / eps).where(eps > 0)
+    pbr = (price / bps).where(bps > 0)
+    sec = pd.Series({c: info[c]["sector"] for c in price.columns})
+
+    def rel(x):
+        med = x.T.groupby(sec).transform("median").T
+        cnt = x.notna().T.groupby(sec).transform("sum").T
+        uni = x.median(axis=1)
+        med = med.where(cnt >= 4, np.repeat(uni.to_numpy()[:, None], x.shape[1], axis=1))
+        return x / med
+    rper, rpbr = rel(per), rel(pbr)
+    cheap = _b(rper < 1) & _b(rpbr < 1) & _b(roe >= VAL_ROE)
+    vscore = (rper.rank(axis=1, pct=True, ascending=False) + rpbr.rank(axis=1, pct=True, ascending=False)
+              + roe.rank(axis=1, pct=True)) / 3 * 100
+    print(f"  저평가 데이터: {int(per.iloc[-1].notna().sum())}종목 PER 계산, 오늘 저평가 {int(cheap.iloc[-1].sum())}종목")
+    return {"per": per, "pbr": pbr, "roe": roe, "rper": rper, "rpbr": rpbr, "cheap": cheap, "vscore": vscore}
+
+
 def naver_history(code, count):
     """네이버 차트(fchart) 일봉 → DataFrame[close, vol] (참고 대시보드와 같은 출처)"""
     url = (f"https://fchart.stock.naver.com/sise.nhn?symbol={code}"
@@ -712,10 +842,14 @@ RULES = [
     {"id": "R6", "name": "중기 정배열 신규 + 최근 거래량 신고가", "desc": "R5 + 최근 20일 안에 R1이 있었음"},
     {"id": "R7", "name": "눌림목: 중기 정배열 중 20일선 이탈", "desc": "중기 정배열을 유지한 채 종가가 20일선 아래로 처음 내려온 날"},
     {"id": "R8", "name": "깊은 눌림목: 중기 정배열 중 고점 −8%", "desc": "중기 정배열을 유지한 채 20일 고점 대비 8% 이상 하락한 첫날"},
+    {"id": "V0", "name": "저평가 종목 (매월 초)", "desc": f"PER·PBR이 모두 같은 업종 중간값보다 낮고 ROE {VAL_ROE:g}% 이상인 종목을 매달 첫 거래일에 산다고 가정 (비교 기준)"},
+    {"id": "V1", "name": "저평가 + 중기 정배열 신규", "desc": "저평가 상태에서 20>60>120일선 정배열이 새로 완성된 날"},
+    {"id": "V2", "name": "저평가 + 거래량 신고가", "desc": "저평가 상태에서 60일 고점을 거래량 2배 이상으로 돌파한 날"},
+    {"id": "V3", "name": "저평가 + 단기 정배열 신규", "desc": "저평가 상태에서 5>10>20일선 정배열이 새로 완성된 날"},
 ]
 
 
-def rule_fires(price, sig, sec_mask, sec_streak, gap20, regime):
+def rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val=None):
     C = sig["fires"]["C"]
     mid = sec_mask["mid"]
     hollow = pd.DataFrame(np.repeat(regime["hollow"].to_numpy()[:, None], price.shape[1], axis=1),
@@ -723,7 +857,16 @@ def rule_fires(price, sig, sec_mask, sec_streak, gap20, regime):
     mid_new = sec_streak["mid"] == 1
     W1, W4 = sig["warns"]["W1"], sig["warns"]["W4"]
     first = lambda m: m & ~m.shift(1, fill_value=False)
-    return {
+    if val is not None:
+        cheap = val["cheap"]
+        mon = pd.Series(price.index.to_period("M"), index=price.index)
+        mfirst = (mon != mon.shift(1)).to_numpy()[:, None] & np.ones((1, price.shape[1]), dtype=bool)
+        vf = {"V0": cheap & pd.DataFrame(mfirst, index=price.index, columns=price.columns),
+              "V1": mid_new & cheap, "V2": C & cheap, "V3": (sec_streak["short"] == 1) & cheap}
+    else:
+        none = pd.DataFrame(False, index=price.index, columns=price.columns)
+        vf = {k: none for k in ("V0", "V1", "V2", "V3")}
+    return {**vf,
         "R1": C,
         "R2": C & mid,
         "R3": C & _b(gap20 < HOT),
@@ -815,7 +958,7 @@ CHART_DAYS = 120      # 화면에 보이는 기간
 CHART_PAD = 60        # 60일선 계산용 앞 구간
 
 
-def chart_data(ix_id, price, info, rfires, gmap, sig):
+def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
     n = CHART_DAYS + CHART_PAD
     p = price.iloc[-n:]
     off = len(price) - len(p)
@@ -839,13 +982,16 @@ def chart_data(ix_id, price, info, rfires, gmap, sig):
             if sell[gi, j]:
                 x.append([i, [w for w in wnames if warr[w][gi, j]]])
         stocks[t] = {"n": info[t]["name"], "c": close, "b": b, "x": x}
+        if val is not None:
+            stocks[t]["v"] = [_r(val["per"][t].iloc[-1]), _r(val["pbr"][t].iloc[-1], 2), _r(val["roe"][t].iloc[-1]),
+                              bool(val["cheap"][t].iloc[-1])]
     out = {"dates": [d.strftime("%Y-%m-%d") for d in p.index], "pad": CHART_PAD,
            "grades": gmap, "stocks": stocks}
     (DATA / ix_id / "charts.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")),
                                               encoding="utf-8")
 
 
-def build(ix, price, vol, info, source, demo, updated):
+def build(ix, price, vol, info, source, demo, updated, fund=None):
     out_dir = DATA / ix["id"]
     all_p = sorted({p for s in SECTIONS for p in s["mas"]} | set(FULL_MAS))
     ma = {p: price.rolling(p, min_periods=p).mean() for p in all_p}
@@ -866,10 +1012,18 @@ def build(ix, price, vol, info, source, demo, updated):
     sig = compute_signals(price, vol, ma, gap20, sec_mask)
     mshort, ew = market_series(price, sec_mask)
     regime = regime_flags(mshort, ew)
-    rfires = rule_fires(price, sig, sec_mask, sec_streak, gap20, regime)
+    val = value_panel(price, info, fund)
+    rfires = rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val)
     rgrades = grade_rules(price, rfires)
     gmap = {g["id"]: g["grade"] for g in rgrades}
-    ractive = {k: recent(v, CAND_DAYS) for k, v in rfires.items()}
+    ractive = {k: recent(v, CAND_DAYS) for k, v in rfires.items() if k != "V0"}   # V0는 비교 기준이라 후보에서 제외
+
+    def vinfo(d, t):
+        if val is None:
+            return {}
+        g = lambda k, nd=1: _r(val[k].loc[d, t], nd)
+        return {"per": g("per"), "pbr": g("pbr", 2), "roe": g("roe"), "vs": g("vscore", 0),
+                "cheap": bool(val["cheap"].loc[d, t])}
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dates = list(price.index[-SNAPSHOT_DAYS:])
@@ -919,7 +1073,7 @@ def build(ix, price, vol, info, source, demo, updated):
         for rid, act in ractive.items():
             row = act.loc[d]
             for t in row[row].index:
-                c = cands.setdefault(t, {"code": t, **info[t], "rules": [], "gap": _r(gap20.loc[d, t]), "ago": 9,
+                c = cands.setdefault(t, {"code": t, **info[t], **vinfo(d, t), "rules": [], "gap": _r(gap20.loc[d, t]), "ago": 9,
                                          "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
                 c["rules"].append(rid)
                 fired = rfires[rid][t].iloc[max(0, pos - CAND_DAYS + 1):pos + 1].to_numpy()
@@ -932,16 +1086,26 @@ def build(ix, price, vol, info, source, demo, updated):
         cands = sorted(cands.values(), key=lambda c: (rank[c["best"]], c["ago"], -len(c["rules"]), -(c["cap"] or 0)))
         alerts = [{"kind": REGIME_TEXT[k][0], "title": REGIME_TEXT[k][1], "desc": REGIME_TEXT[k][2]}
                   for k, f in regime.items() if bool(f.loc[d])]
+        # 저평가 목록: 오늘 저평가 조건을 만족하는 종목 (추세 상태·최근 규칙과 함께)
+        value = []
+        if val is not None:
+            ch = val["cheap"].loc[d]
+            for t in ch[ch].index:
+                value.append({"code": t, **info[t], **vinfo(d, t), "gap": _r(gap20.loc[d, t]),
+                              "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]],
+                              "rules": [r for r, act in ractive.items() if bool(act.loc[d, t])]})
+            value.sort(key=lambda x: -(x["vs"] or 0))
         out = {"date": d.strftime("%Y-%m-%d"), "updated": updated, "index": ix["name"],
                "universe": len(info), "source": source, "demo": demo, "sections": sections,
-               "early": early[:60], "exits": exits[:60], "alerts": alerts, "cands": cands[:80]}
+               "early": early[:60], "exits": exits[:60], "alerts": alerts, "cands": cands[:80],
+               "value": value[:80], "has_value": val is not None}
         (out_dir / f"{out['date']}.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
 
     keep = {d.strftime("%Y-%m-%d") for d in dates}
     for f in out_dir.glob("????-??-??.json"):
         if f.stem not in keep:
             f.unlink()
-    chart_data(ix["id"], price, info, rfires, gmap, sig)
+    chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap)
     meta = {"forward": fwd_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
@@ -1109,7 +1273,13 @@ def main():
         print(f"[{ix['name']}]  (+{time.time() - t0:.0f}초)")
         try:
             price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps, name_map)
-            sector_out[ix["id"]], summ = build(ix, price, vol, info, source, args.demo, updated)
+            try:
+                fund = (demo_fund(price, np.random.default_rng(3)) if args.demo
+                        else fetch_fundamentals(list(price.columns)))
+            except Exception as e:
+                warn(f"{ix['name']} 재무 수집 실패(저평가 기능만 빠짐): {e}")
+                fund = None
+            sector_out[ix["id"]], summ = build(ix, price, vol, info, source, args.demo, updated, fund)
             summaries.append(summ)
             ok += 1
         except Exception as e:
