@@ -1072,6 +1072,9 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
 
     sig = compute_signals(price, vol, ma, gap20, sec_mask)
     up60 = _b(ma[60] > ma[60].shift(5))
+    # 그날의 하락 경고/눌림: 정배열이던 종목에서 경보 2개 이상이 처음 켜진 날 (차트의 ▼·▽와 같은 기준)
+    lvl2 = _b(sig["wcount"] >= 2) & sig["was_aligned"]
+    sell_ev = dedupe(lvl2 & ~lvl2.shift(1, fill_value=False))
     mshort, ew = market_series(price, sec_mask)
     regime = regime_flags(mshort, ew)
     val = value_panel(price, info, fund)
@@ -1136,6 +1139,24 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
                           "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
         exits.sort(key=lambda x: (-x["level"], x["dd"] if x["dd"] is not None else 0))
         # 검증된 후보: 최근 5일 안에 규칙이 켜진 종목 (등급과 함께)
+        # 그날 신호 (종목 옆 배지용): ▲ 그날 켜진 규칙, ▼/▽ 그날 처음 뜬 경고
+        day_sig = {}
+        for rid, f in rfires.items():
+            if rid == "V0":
+                continue
+            row = f.loc[d]
+            for t in row[row].index:
+                day_sig.setdefault(t, {}).setdefault("u", []).append(rid)
+        se = sell_ev.loc[d]
+        for t in se[se].index:
+            day_sig.setdefault(t, {})["d"] = "pull" if bool(up60.loc[d, t]) else "down"
+        for t, v in day_sig.items():
+            if v.get("u"):
+                v["g"] = min((gmap[r] for r in v["u"]), key=lambda g: {"A": 0, "B": 1, "C": 2}[g])
+        today_list = sorted(({"code": t, **info[t], **v, "gap": _r(gap20.loc[d, t]),
+                              "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]}
+                             for t, v in day_sig.items()),
+                            key=lambda x: ({"A": 0, "B": 1, "C": 2}.get(x.get("g"), 3), -(x["cap"] or 0)))
         cands = {}
         pos = price.index.get_loc(d)
         for rid, act in ractive.items():
@@ -1166,7 +1187,8 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
         out = {"date": d.strftime("%Y-%m-%d"), "updated": updated, "index": ix["name"],
                "universe": len(info), "source": source, "demo": demo, "sections": sections,
                "early": early[:60], "exits": exits[:60], "alerts": alerts, "cands": cands[:80],
-               "value": value[:80], "has_value": val is not None}
+               "value": value[:80], "has_value": val is not None,
+               "sig": {t: v for t, v in day_sig.items()}, "today": today_list}
         (out_dir / f"{out['date']}.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
 
     keep = {d.strftime("%Y-%m-%d") for d in dates}

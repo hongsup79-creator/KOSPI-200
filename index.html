@@ -126,7 +126,7 @@
   .alert.danger { background: rgba(214,54,59,0.10); border-color: var(--red); }
   .alert.warn { background: var(--notice-bg); border-color: var(--notice-text); color: var(--notice-text); }
   .alert.good { background: var(--green-bg); border-color: var(--green); }
-  .views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 16px; }
+  .views { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 16px; }
   .views button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px;
                   font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
   .views button b { display: block; font-size: 20px; color: var(--text); margin-top: 2px; }
@@ -154,9 +154,12 @@
   .mk .chip { white-space: normal; }
   .mk th:first-child, .mk td:first-child { width: 72px; padding-right: 8px; } .mk th:last-child, .mk td:last-child { width: 80px; }
   .tri-up { color: var(--up); font-weight: 700; } .tri-dn { color: var(--dn); font-weight: 700; }
-  .tri-off { color: var(--muted); } .tri-pull { color: var(--notice-text); font-weight: 700; }
+  .tri-off { color: var(--muted); }
+  .sb { display: inline-block; margin-left: 5px; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 5px; white-space: nowrap; }
+  .sb.up { color: #fff; background: var(--up); } .sb.dn { color: #fff; background: var(--dn); }
+  .sb.pull { color: var(--notice-text); background: var(--notice-bg); } .sb.off { color: var(--muted); border: 1px solid var(--line); } .tri-pull { color: var(--notice-text); font-weight: 700; }
   .fwd-list td { font-size: 12px; padding: 6px 3px; }
-  @media (max-width: 520px) { .views { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .views { grid-template-columns: repeat(3, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
   .badge.val { background: var(--tab-on); color: var(--accent); }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
@@ -184,7 +187,7 @@ const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
 };
-const state = { vTrend: false, tab: 'kospi200', sort: 'days', q: '', view: 'cands', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const state = { vTrend: false, tab: 'kospi200', sort: 'days', q: '', view: 'today', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
 const PALETTE = {
   light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
   dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
@@ -227,7 +230,7 @@ const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo'
 function row(it) {
   const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
-    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
+    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
     <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배">${it.score ?? '-'}</span></td>
@@ -304,9 +307,37 @@ function drawThermo(meta) {
 // 신호 성적표
 const pctS = v => v == null ? '<span class="tag">-</span>' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
 const matchQ = it => { const q = state.q.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q) || (it.sector || '').toLowerCase().includes(q) || it.code.includes(q); };
-const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>`;
+let curSig = {};
+const sigBadge = code => { const v = curSig[code]; if (!v) return '';
+  let b = '';
+  if (v.u) b += v.g === 'C' ? '<span class="sb off" title="그날 켜진 규칙(등급 미달)">△</span>' : `<span class="sb up" title="그날 상승 초입 규칙 (${v.g}등급)">▲${v.g}</span>`;
+  if (v.d) b += v.d === 'pull' ? '<span class="sb pull" title="그날 눌림 (60일선 상승 중)">▽눌림</span>' : '<span class="sb dn" title="그날 하락 경고 (60일선 꺾임)">▼경고</span>';
+  return b; };
+const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}`;
 const alignTag = it => it.aligned && it.aligned.length
   ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
+
+function renderToday(data, meta) {
+  if (!data.today) return `<section><div class="empty">새 데이터가 아직 없습니다. 데이터 갱신을 한 번 실행해 주세요.</div></section>`;
+  const rules = Object.fromEntries((meta.rules || []).map(r => [r.id, r]));
+  const all = data.today.filter(matchQ);
+  const up = all.filter(x => x.u && x.g !== 'C'), weak = all.filter(x => x.u && x.g === 'C');
+  const pull = all.filter(x => x.d === 'pull'), dn = all.filter(x => x.d === 'down');
+  const chips = x => (x.u || []).map(r => rules[r] ? `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>` : '').join('');
+  const gapS = g => g == null ? '-' : (g > 0 ? '+' : '') + g + '%';
+  const table = (arr, withRules) => arr.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">20일선 대비</th><th class="num sector-col">시가총액</th></tr></thead><tbody>
+    ${arr.map(x => `<tr><td>${nameCell(x)} ${alignTag(x)}${withRules ? '<br>' + chips(x) : ''}</td><td class="sector sector-col">${esc(x.sector)}</td>
+      <td class="num">${gapS(x.gap)}</td><td class="num sector-col">${fmtCap(x.cap)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:10px 0">없음</div>';
+  return `<section>
+    <div class="sec-head"><h2>🔔 ${data.date} 장 마감 기준 신호</h2><span class="count">${all.length}종목</span></div>
+    <div class="note" style="margin:6px 0 4px">이 날 <b>새로 신호가 뜬 종목만</b> 모았습니다. 신호는 장 마감 후 확정되므로 실제 대응은 <b>다음 거래일</b>입니다. 종목명을 누르면 차트와 손절선이 나옵니다.</div>
+    <div class="sub-h"><span class="tri-up">▲ 상승 초입</span> — 검증 통과(A·B) 규칙 · ${up.length}</div>${table(up, true)}
+    <div class="sub-h"><span class="tri-pull">▽ 눌림</span> — 정배열 종목이 꺾였지만 60일선은 상승 중 · ${pull.length}</div>${table(pull, false)}
+    <div class="sub-h"><span class="tri-dn">▼ 하락 경고</span> — 정배열 종목이 꺾였고 60일선도 꺾임 · ${dn.length}</div>${table(dn, false)}
+    ${weak.length ? `<details class="defs"><summary>△ 등급 미달 규칙이 켜진 종목 ${weak.length}개 보기 ▾</summary>${table(weak, true)}</details>` : ''}
+    <div class="note" style="margin-top:10px">▽·▼는 자동 매도 신호가 아닙니다(성적표 ② 참고). 지금 시장 국면에 따라 규칙 성적이 달라지니 성적표 ⓪의 ‘지금 약세장/강세장’ 칸도 함께 보세요.</div>
+  </section>`;
+}
 
 function renderCands(data, meta) {
   const rules = Object.fromEntries((meta.rules || []).map(r => [r.id, r]));
@@ -471,6 +502,7 @@ async function renderAlignment(ixId) {
   catch { panel().innerHTML = `<div class="empty">${ix.name} 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>`; return; }
   const date = state.date[ixId] || meta.dates[0];
   const data = await getJSON(ix.dir + date + '.json');
+  curSig = data.sig || {};
   if (state.tab !== ixId) return;
 
   const notices = [];
@@ -492,7 +524,8 @@ async function renderAlignment(ixId) {
     ${(data.alerts || []).map(a => `<div class="alert ${a.kind}"><b>🚨 ${esc(a.title)}</b>${esc(a.desc)}</div>`).join('')}
     ${thermo(meta, ix)}
     <div class="views" id="views">
-      ${[['cands','🎯 검증 후보', (() => { const g = Object.fromEntries((meta.rules || []).map(r => [r.id, r.grade])); return (data.cands || []).filter(c => c.rules.some(r => g[r] === 'A' || g[r] === 'B')).length; })()],
+      ${[['today','🔔 그날 신호', (data.today || []).filter(x => (x.u && x.g !== 'C') || x.d).length],
+         ['cands','🎯 검증 후보', (() => { const g = Object.fromEntries((meta.rules || []).map(r => [r.id, r.grade])); return (data.cands || []).filter(c => c.rules.some(r => g[r] === 'A' || g[r] === 'B')).length; })()],
          ['aligned','📈 정배열', data.sections.map(x => x.items.length).join(' · ')],
          ['value','💎 저평가', data.has_value ? (data.value || []).length : '-'],
          ['exits','📉 조정 중', (data.exits || []).length]]
@@ -502,7 +535,7 @@ async function renderAlignment(ixId) {
     ${scoreTable(meta)}`;
   drawThermo(meta);
 
-  const body = () => state.view === 'cands' ? renderCands(data, meta) : state.view === 'early' ? renderEarly(data, meta) : state.view === 'value' ? renderValue(data, meta)
+  const body = () => state.view === 'today' ? renderToday(data, meta) : state.view === 'cands' ? renderCands(data, meta) : state.view === 'early' ? renderEarly(data, meta) : state.view === 'value' ? renderValue(data, meta)
     : state.view === 'exits' ? renderExits(data, meta) : data.sections.map(renderSection).join('');
   const paint = () => {
     document.getElementById('secs').innerHTML = body();
