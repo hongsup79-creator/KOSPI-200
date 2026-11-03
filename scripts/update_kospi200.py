@@ -433,6 +433,7 @@ def demo_fund(price, rng):
     return out
 
 
+LOW_PER = 4.0      # 이보다 낮은 PER은 일회성 이익(자산 매각 등)일 가능성이 커서 확인 표시
 VAL_ROE = 5.0      # 최소 수익성(ROE %): 너무 낮으면 '싼 이유가 있는' 종목으로 봄
 
 
@@ -499,10 +500,20 @@ def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
     if failed:
         print(f"  시세 실패 {len(failed)}개: {failed[:10]}")
     price = pd.DataFrame(closes).sort_index().dropna(how="all").tail(count).replace(0, np.nan)
+    price = drop_intraday(price)
     if not with_volume:
         return price
     vol = pd.DataFrame(vols).reindex(index=price.index, columns=price.columns)
     return price, vol
+
+
+def drop_intraday(df):
+    """장 마감(15:30) 전·직후에 실행되면 오늘 값은 장중 가격이므로 빼고 어제까지로 계산"""
+    now = datetime.now(KST)
+    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < (15, 40):
+        print(f"  장중 실행({now:%H:%M}) → 오늘({now:%m-%d}) 가격 제외, 어제 종가까지로 계산")
+        return df.iloc[:-1]
+    return df
 
 
 def adjust_splits(price):
@@ -791,10 +802,17 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
     # 달별 '경보 없는 정배열 종목' 평균 (같은 달끼리 비교)
     cm = pd.Series(np.where(ctrl, r20, np.nan).ravel()).groupby(MON.ravel()).mean()
     exits = []
-    defs = [(w["id"], w["name"], sig["warns"][w["id"]]) for w in EXITS] + \
-           [("L2", "경보 2개 이상", sig["wcount"] >= 2)]
-    for wid, name, m in defs:
+    ma60 = price.rolling(60, min_periods=60).mean()
+    up60 = _b(ma60 > ma60.shift(5))
+    l2 = sig["wcount"] >= 2
+    defs = [(w["id"], w["name"], sig["warns"][w["id"]], None) for w in EXITS] + \
+           [("L2", "경보 2개 이상 (▼ 전체)", l2, None),
+            ("L2p", "▼ 눌림 (60일선 상승 중)", l2, up60),
+            ("L2d", "▼ 하락 경고 (60일선 하락 중)", l2, ~up60)]
+    for wid, name, m, flt in defs:
         ev = dedupe(m & ~m.shift(1, fill_value=False)).to_numpy(dtype=bool) & base
+        if flt is not None:
+            ev &= flt.to_numpy(dtype=bool)
         r, dd = np.where(ev, r20, np.nan).ravel(), np.where(ev, dd_next, np.nan).ravel()
         k = ~np.isnan(r) & ~np.isnan(dd)
         if k.sum() == 0:
@@ -831,6 +849,7 @@ def scorecard(price, sec_streak, sig, short, ew, regime):
 # 5년 성적에서 쓸모가 보인 재료만 조합. 규칙은 미리 고정하고,
 # 앞 기간과 뒤 기간 '둘 다' 통한 규칙만 화면 후보로 올린다(과거 맞추기 방지).
 SPLIT = "2025-01-01"
+HOLD_MARGIN = 0.15   # 어제 B였던 규칙은 평균 대비가 비용(0.3%)보다 0.15%p 이상 낮아져야 C로 내림
 CAND_DAYS = 3        # 규칙이 최근 며칠 안에 켜진 종목을 오늘 후보로 보여 줄지 (늦을수록 성과가 떨어짐)
 
 RULES = [
@@ -878,7 +897,7 @@ def rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val=None):
     }
 
 
-def grade_rules(price, fires):
+def grade_rules(price, fires, short=None, prev=None):
     T, N = price.shape
     MON = np.repeat(price.index.to_period("M").astype(str).to_numpy()[:, None], N, axis=1)
     early = np.repeat((price.index < SPLIT)[:, None], N, axis=1)
@@ -899,12 +918,26 @@ def grade_rules(price, fires):
                     "win": _r((r[k] > 0).mean() * 100), "avg": _r(r[k].mean(), 2), "t": _r(t, 1), "months": m}
         allp, tr, te = part(np.ones_like(ev)), part(early), part(~early)
         late = part(np.ones_like(ev), 3)            # 사흘 늦게 샀다면
+        hot = cold = None
+        if short is not None:
+            hot = part(np.repeat((short >= 50).to_numpy()[:, None], N, axis=1))
+            cold = part(np.repeat((short <= 20).to_numpy()[:, None], N, axis=1))
         ok_split = bool(tr and te and tr["excess"] > COST and te["excess"] > COST)
         t_all = (allp or {}).get("t") or 0
         months = (allp or {}).get("months") or 0
         grade = ("A" if ok_split and t_all >= SIG_T_A and months >= MIN_MONTHS
                  else "B" if ok_split and t_all >= 1.0 else "C")
-        out.append({**rd, "all": allp, "train": tr, "test": te, "late": late, "grade": grade})
+        # 등급이 하루하루 흔들리지 않도록: 기준선 근처에서는 어제 등급 유지 (확실히 나빠져야 강등)
+        held = False
+        pg = (prev or {}).get(rd["id"])
+        if pg in ("A", "B") and grade != pg and tr and te and allp:
+            near_split = min(tr["excess"], te["excess"]) > COST - HOLD_MARGIN
+            if pg == "A" and grade == "B" and t_all >= SIG_T_A - 0.3 and months >= MIN_MONTHS:
+                grade, held = "A", True
+            elif grade == "C" and near_split and t_all >= 1.0 - 0.3:
+                grade, held = "B", True
+        out.append({**rd, "all": allp, "train": tr, "test": te, "late": late, "hot": hot, "cold": cold,
+                    "grade": grade, "held": held})
     return out
 
 
@@ -913,44 +946,66 @@ FWD_HORIZONS = [5, 10, 20]
 
 
 def forward_log(ix_id, price, cands_today, today, gmap):
-    """오늘의 A·B 후보(오늘 켜진 것만)를 기록해 두고, 이후 실제 성과를 매일 계산.
+    """오늘의 A·B 후보(오늘 켜진 것만)를 종목당 하루 1건으로 기록해 두고, 이후 실제 성과를 매일 계산.
     규칙을 고를 때 본 적 없는 '미래' 데이터라서 가장 정직한 검증."""
     f = DATA / "forward" / f"{ix_id}.json"
     try:
         log = json.loads(f.read_text(encoding="utf-8"))
     except Exception:
         log = {"since": today, "items": []}
-    seen = {(i["code"], i["rule"]) for i in log["items"]
-            if (pd.Timestamp(today) - pd.Timestamp(i["date"])).days < 30}
+    # 예전 형식(규칙마다 1건)을 종목·날짜당 1건으로 합치기
+    merged = {}
+    for it in log["items"]:
+        k = (it["date"], it["code"])
+        m = merged.setdefault(k, {"date": it["date"], "code": it["code"], "name": it["name"],
+                                  "rules": [], "grade": it.get("grade", "B")})
+        for r in it.get("rules") or [it.get("rule")]:
+            if r and r not in m["rules"]:
+                m["rules"].append(r)
+        if it.get("grade") == "A":
+            m["grade"] = "A"
+    items = sorted(merged.values(), key=lambda x: (x["date"], x["code"]))
+    seen = {i["code"] for i in items if (pd.Timestamp(today) - pd.Timestamp(i["date"])).days < 30}
     for c in cands_today:
-        if c.get("ago", 9) != 0:
+        if c.get("ago", 9) != 0 or c["code"] in seen:
             continue
-        for r in c["rules"]:
-            if gmap.get(r) in ("A", "B") and (c["code"], r) not in seen:
-                log["items"].append({"date": today, "code": c["code"], "name": c["name"], "rule": r,
-                                     "grade": gmap[r]})
+        rs = [r for r in c["rules"] if gmap.get(r) in ("A", "B")]
+        if rs:
+            items.append({"date": today, "code": c["code"], "name": c["name"], "rules": rs,
+                          "grade": "A" if any(gmap[r] == "A" for r in rs) else "B"})
+            seen.add(c["code"])
+    log["items"] = items
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
 
-    # 성과 계산 (다음 날 종가 진입)
+    # 성과 계산 (다음 날 종가 진입, 같은 기간 구성종목 평균 대비)
     idx = {d.strftime("%Y-%m-%d"): i for i, d in enumerate(price.index)}
     res = {str(h): [] for h in FWD_HORIZONS}
-    for it in log["items"]:
+    rows = []
+    for it in items:
         i = idx.get(it["date"])
-        if i is None or it["code"] not in price.columns:
-            continue
-        for h in FWD_HORIZONS:
-            j0, j1 = i + ENTRY_LAG, i + ENTRY_LAG + h
-            if j1 >= len(price):
-                continue
-            p0, p1 = price.iloc[j0], price.iloc[j1]
-            r = (p1[it["code"]] / p0[it["code"]] - 1) * 100
-            bench = ((p1 / p0 - 1) * 100).mean()
-            if not np.isnan(r):
-                res[str(h)].append(r - bench)
+        row = {"date": it["date"], "name": it["name"], "code": it["code"], "rules": it["rules"], "grade": it["grade"]}
+        if i is not None and it["code"] in price.columns and i + ENTRY_LAG < len(price):
+            j0 = i + ENTRY_LAG
+            p0 = price.iloc[j0]
+            row["entry"] = _r(p0[it["code"]], 0)
+            for h in FWD_HORIZONS:
+                j1 = min(j0 + h, len(price) - 1)
+                p1 = price.iloc[j1]
+                r = (p1[it["code"]] / p0[it["code"]] - 1) * 100
+                ex = r - ((p1 / p0 - 1) * 100).mean()
+                if np.isnan(r):
+                    continue
+                if j0 + h < len(price):
+                    res[str(h)].append(ex)
+                    row[f"x{h}"] = _r(ex, 1)
+                elif "now" not in row:
+                    row["now"] = _r(ex, 1)          # 아직 기간이 안 끝난 것: 지금까지
+                    row["days"] = j1 - j0
+        rows.append(row)
     summ = {h: ({"n": len(v), "excess": _r(np.mean(v), 2), "beat": _r(np.mean(np.array(v) > 0) * 100)}
                 if v else {"n": 0}) for h, v in res.items()}
-    return {"since": log["since"], "logged": len(log["items"]), "h": summ}
+    return {"since": log["since"], "logged": len(items), "h": summ, "items": rows[::-1][:60]}
 
 
 # ---------------------------------------------------------------- 종목 차트 (진입·경고 시점 표시)
@@ -965,6 +1020,9 @@ def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
     buys = {r: dedupe(f).to_numpy(dtype=bool) for r, f in rfires.items()}
     lvl2 = _b(sig["wcount"] >= 2) & sig["was_aligned"]
     sell = dedupe(lvl2 & ~lvl2.shift(1, fill_value=False)).to_numpy(dtype=bool)
+    ma60 = price.rolling(60, min_periods=60).mean()
+    up60 = _b(ma60 > ma60.shift(5)).to_numpy(dtype=bool)        # 60일선이 오르는 중이면 '눌림'
+    p20 = price.rolling(20, min_periods=20).mean()
     wnames = list(sig["warns"].keys())
     warr = {w: sig["warns"][w].to_numpy(dtype=bool) for w in wnames}
     stocks = {}
@@ -980,8 +1038,11 @@ def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
             if rs:
                 b.append([i, rs])
             if sell[gi, j]:
-                x.append([i, [w for w in wnames if warr[w][gi, j]]])
-        stocks[t] = {"n": info[t]["name"], "c": close, "b": b, "x": x}
+                x.append([i, [w for w in wnames if warr[w][gi, j]], "pull" if up60[gi, j] else "down"])
+        # 손절선 재료: 20일선, 최근 20일 하루 평균 변동폭(%)
+        dchg = (p[t] / p[t].shift(1) - 1).abs().iloc[-20:].mean() * 100
+        stocks[t] = {"n": info[t]["name"], "c": close, "b": b, "x": x,
+                     "m20": _r(p20[t].iloc[-1], 0), "dv": _r(dchg, 2)}
         if val is not None:
             stocks[t]["v"] = [_r(val["per"][t].iloc[-1]), _r(val["pbr"][t].iloc[-1], 2), _r(val["roe"][t].iloc[-1]),
                               bool(val["cheap"][t].iloc[-1])]
@@ -1010,11 +1071,16 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
     score = sum(p.rank(axis=1, pct=True) for p in parts) / len(parts) * 100
 
     sig = compute_signals(price, vol, ma, gap20, sec_mask)
+    up60 = _b(ma[60] > ma[60].shift(5))
     mshort, ew = market_series(price, sec_mask)
     regime = regime_flags(mshort, ew)
     val = value_panel(price, info, fund)
     rfires = rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val)
-    rgrades = grade_rules(price, rfires)
+    try:
+        prev = {r["id"]: r["grade"] for r in json.loads((out_dir / "dates.json").read_text(encoding="utf-8")).get("rules", [])}
+    except Exception:
+        prev = {}
+    rgrades = grade_rules(price, rfires, mshort, None if demo else prev)
     gmap = {g["id"]: g["grade"] for g in rgrades}
     ractive = {k: recent(v, CAND_DAYS) for k, v in rfires.items() if k != "V0"}   # V0는 비교 기준이라 후보에서 제외
 
@@ -1022,8 +1088,9 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
         if val is None:
             return {}
         g = lambda k, nd=1: _r(val[k].loc[d, t], nd)
-        return {"per": g("per"), "pbr": g("pbr", 2), "roe": g("roe"), "vs": g("vscore", 0),
-                "cheap": bool(val["cheap"].loc[d, t])}
+        per = g("per")
+        return {"per": per, "pbr": g("pbr", 2), "roe": g("roe"), "vs": g("vscore", 0),
+                "cheap": bool(val["cheap"].loc[d, t]), "oneoff": bool(per is not None and per < LOW_PER)}
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dates = list(price.index[-SNAPSHOT_DAYS:])
@@ -1065,6 +1132,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
                           "warns": [w["id"] for w in EXITS if sig["warns"][w["id"]].loc[d, t]],
                           "bigvol": bool(sig["W1vol"].loc[d, t]), "gap": _r(gap20.loc[d, t]),
                           "dd": _r(sig["dd20"].loc[d, t]),
+                          "up60": bool(up60.loc[d, t]),
                           "aligned": [x["id"] for x in SECTIONS if sec_mask[x["id"]].loc[d, t]]})
         exits.sort(key=lambda x: (-x["level"], x["dd"] if x["dd"] is not None else 0))
         # 검증된 후보: 최근 5일 안에 규칙이 켜진 종목 (등급과 함께)
@@ -1107,7 +1175,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
             f.unlink()
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap)
-    meta = {"forward": fwd_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
+    meta = {"regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
             "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),
             "defs": {"early": EARLY, "exits": EXITS}, "rules": rgrades, "split": SPLIT}
@@ -1303,8 +1371,6 @@ def main():
         DATA.mkdir(exist_ok=True)
         sector_file.write_text(json.dumps(sector_out, ensure_ascii=False), encoding="utf-8")
     print(f"총 소요 {time.time() - t0:.0f}초")
-    if summaries and not args.demo:
-        send_telegram(summaries)
     if ok < len(INDEXES) + 2:
         print(f"일부 실패: {ok}/{len(INDEXES) + 2} 성공", file=sys.stderr)
     if ok == 0:
