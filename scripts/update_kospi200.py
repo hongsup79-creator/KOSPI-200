@@ -472,28 +472,31 @@ def value_panel(price, info, fund):
 
 
 def naver_history(code, count):
-    """네이버 차트(fchart) 일봉 → DataFrame[close, vol] (참고 대시보드와 같은 출처)"""
+    """네이버 차트(fchart) 일봉 → DataFrame[close, vol, high, low] (참고 대시보드와 같은 출처)
+    한 줄 형식: 날짜|시가|고가|저가|종가|거래량"""
     url = (f"https://fchart.stock.naver.com/sise.nhn?symbol={code}"
            f"&timeframe=day&count={count}&requestType=0")
     r = _get(url, as_json=False)
     text = r.content.decode("euc-kr", errors="replace")
     rows = {}
-    for d, c, v in re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|([\d.]*)', text):
-        rows[pd.Timestamp(d)] = (float(c), float(v) if v else np.nan)
-    df = pd.DataFrame.from_dict(rows, orient="index", columns=["close", "vol"])
+    for d, h, l, c, v in re.findall(r'data="(\d{8})\|[^|]*\|([\d.]*)\|([\d.]*)\|([\d.]+)\|([\d.]*)', text):
+        rows[pd.Timestamp(d)] = (float(c), float(v) if v else np.nan,
+                                 float(h) if h else np.nan, float(l) if l else np.nan)
+    df = pd.DataFrame.from_dict(rows, orient="index", columns=["close", "vol", "high", "low"])
     return df.sort_index()
 
 
-def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
+def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False, with_hl=False):
     def one(c):
         try:
             return naver_history(c, count)
         except Exception:
             return None
-    closes, vols, failed = {}, {}, []
+    closes, vols, highs, lows, failed = {}, {}, {}, {}, []
     for c, df in zip(codes, pmap(one, codes)):
         if df is not None and len(df):
             closes[c], vols[c] = df["close"], df["vol"]
+            highs[c], lows[c] = df["high"], df["low"]
         else:
             failed.append(c)
     print(f"  시세 {len(closes)}/{len(codes)}개 수집")
@@ -504,7 +507,11 @@ def fetch_prices(codes, count=HISTORY_DAYS, with_volume=False):
     if not with_volume:
         return price
     vol = pd.DataFrame(vols).reindex(index=price.index, columns=price.columns)
-    return price, vol
+    if not with_hl:
+        return price, vol
+    hl = tuple(pd.DataFrame(x).reindex(index=price.index, columns=price.columns).replace(0, np.nan)
+               for x in (highs, lows))
+    return price, vol, hl
 
 
 def drop_intraday(df):
@@ -517,10 +524,12 @@ def drop_intraday(df):
     return df
 
 
-def adjust_splits(price):
+def adjust_splits(price, extra=()):
     """하루 ±30%(가격제한폭)를 넘는 변동은 액면분할·병합 같은 기업행위로 보고 그 이전 가격을 비율만큼 보정.
-    (데이터가 이미 수정주가면 이런 변동이 없으므로 아무것도 바뀌지 않음)"""
+    (데이터가 이미 수정주가면 이런 변동이 없으므로 아무것도 바뀌지 않음)
+    extra(고가·저가 등)에도 종가와 같은 비율을 적용"""
     p = price.copy()
+    extra = [x.copy() for x in extra]
     fixed = 0
     for c in p.columns:
         s = p[c]
@@ -528,27 +537,32 @@ def adjust_splits(price):
         bad = r[(r < 0.65) | (r > 1.45)].dropna()
         for d, ratio in bad.items():
             p.loc[p.index < d, c] = p.loc[p.index < d, c] * ratio
+            for x in extra:
+                if c in x.columns:
+                    x.loc[x.index < d, c] = x.loc[x.index < d, c] * ratio
             fixed += 1
     if fixed:
         print(f"  분할·병합 추정 보정 {fixed}건")
-    return p
+    return (p, tuple(extra)) if extra else p
 
 
 def fetch_real(ix, sectors, caps=None, name_map=None):
     stocks, source = fetch_constituents(ix, caps, name_map)
     caps = caps or {}
     stocks = [(c, n, cap or caps.get(c, 0)) for c, n, cap in stocks]
-    price, vol = fetch_prices([c for c, *_ in stocks], with_volume=True)
+    price, vol, (hi, lo) = fetch_prices([c for c, *_ in stocks], with_volume=True, with_hl=True)
     missing = [c for c, *_ in stocks if c not in price.columns or price[c].notna().sum() == 0]
     if missing:
         print(f"  시세 없음 {len(missing)}개 제외: {missing[:10]}")
     info = {c: {"name": n, "sector": sectors.get(c, "-"), "cap": cap}
             for c, n, cap in stocks if c not in missing}
-    price, vol = adjust_splits(price[list(info)]), vol[list(info)]
+    cols = list(info)
+    price, (hi, lo) = adjust_splits(price[cols], (hi[cols], lo[cols]))
+    vol = vol[cols]
     if price.shape[1] < ix["min"] * 0.8:
         raise RuntimeError(f"시세를 받은 종목이 너무 적습니다: {price.shape[1]}개")
     print(f"  거래일 {len(price)}일 ({price.index[0]:%Y-%m-%d}~{price.index[-1]:%Y-%m-%d})")
-    return price, vol, info, source
+    return price, vol, info, source, (hi, lo)
 
 
 def fetch_demo(ix, _sectors, _caps=None, _names=None):
@@ -564,7 +578,7 @@ def fetch_demo(ix, _sectors, _caps=None, _names=None):
         vol[code] = rng.lognormal(12, 0.5, len(days))
         info[code] = {"name": f"{ix['name']} 샘플{i + 1}", "sector": secs[i % len(secs)],
                       "cap": int(rng.uniform(1e11, 4e14))}
-    return pd.DataFrame(price, index=days), pd.DataFrame(vol, index=days), info, "demo"
+    return pd.DataFrame(price, index=days), pd.DataFrame(vol, index=days), info, "demo", None
 
 
 # ---------------------------------------------------------------- 계산
@@ -1026,6 +1040,63 @@ def forward_log(ix_id, price, cands_today, today, gmap, rfires=None):
     return {"since": log["since"], "logged": len(items), "h": summ, "items": rows[::-1][:60]}
 
 
+# ---------------------------------------------------------------- 윌리엄스 %R (관찰용 — 기존 신호·규칙에는 쓰지 않음)
+WR_N = 14          # 기간(거래일)
+WR_PULL = -80.0    # 이 이하면 '눌림'(최근 14일 범위의 하단 20%)
+
+
+def williams_r(price, hl=None, n=WR_N):
+    """%R = (14일 최고가 − 종가) / (14일 최고가 − 최저가) × −100.  0(꼭대기) ~ −100(바닥)
+    고가·저가가 없으면(데모) 종가로 대신 계산"""
+    hi, lo = hl if hl is not None else (price, price)
+    hi = hi.reindex_like(price).fillna(price)
+    lo = lo.reindex_like(price).fillna(price)
+    hh = hi.rolling(n, min_periods=n).max()
+    ll = lo.rolling(n, min_periods=n).min()
+    rng = (hh - ll).replace(0, np.nan)
+    return (hh - price) / rng * -100
+
+
+def forward_wr(ix_id, price, wr, trend_mask, info, today):
+    """관찰 기록: '중기 정배열 전체' vs '중기 정배열 + %R 눌림(−80 이하로 처음 들어간 날)'의 이후 성과.
+    기록 시작일 이후 데이터만 쓰므로 실전 기록과 같은 '미래' 검증. 기준값은 처음 정한 그대로 고정."""
+    f = DATA / "forward" / f"{ix_id}_wr.json"
+    try:
+        log = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        log = {"since": today, "n": WR_N, "pull": WR_PULL, "trend": "mid"}
+    since = pd.Timestamp(log["since"])
+    pull = _b(wr <= log["pull"])
+    ev = dedupe(trend_mask & pull & ~pull.shift(1, fill_value=False))   # 같은 종목은 20거래일에 1번
+    idx = price.index
+    i0 = int(np.searchsorted(idx, since))
+    res = {"base": {str(h): [] for h in FWD_HORIZONS}, "pull": {str(h): [] for h in FWD_HORIZONS}}
+    rows = []
+    for i in range(i0, len(idx)):
+        j0 = i + ENTRY_LAG
+        on_ev = ev.iloc[i]
+        for t in on_ev[on_ev].index:
+            rows.append({"date": idx[i].strftime("%Y-%m-%d"), "code": t, "name": info[t]["name"],
+                         "wr": _r(wr.iloc[i][t], 0)})
+        if j0 >= len(idx):
+            continue
+        p0 = price.iloc[j0]
+        for h in FWD_HORIZONS:
+            if j0 + h >= len(idx):
+                continue
+            p1 = price.iloc[j0 + h]
+            r = (p1 / p0 - 1) * 100
+            ex = r - r.mean()
+            m = trend_mask.iloc[i]
+            res["base"][str(h)] += [v for v in ex[m[m].index] if not np.isnan(v)]
+            res["pull"][str(h)] += [v for v in ex[on_ev[on_ev].index] if not np.isnan(v)]
+    summ = {g: {h: ({"n": len(v), "excess": _r(np.mean(v), 2), "beat": _r(np.mean(np.array(v) > 0) * 100)}
+                    if v else {"n": 0}) for h, v in d.items()} for g, d in res.items()}
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    return {**log, "h": summ, "events": len(rows), "items": rows[::-1][:40]}
+
+
 # ---------------------------------------------------------------- 종목 차트 (진입·경고 시점 표시)
 CHART_DAYS = 120      # 화면에 보이는 기간
 CHART_PAD = 60        # 60일선 계산용 앞 구간
@@ -1070,7 +1141,7 @@ def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
                                               encoding="utf-8")
 
 
-def build(ix, price, vol, info, source, demo, updated, fund=None):
+def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
     out_dir = DATA / ix["id"]
     all_p = sorted({p for s in SECTIONS for p in s["mas"]} | set(FULL_MAS))
     ma = {p: price.rolling(p, min_periods=p).mean() for p in all_p}
@@ -1088,6 +1159,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
     parts = [spread, slope20, volr, hi52]
     score = sum(p.rank(axis=1, pct=True) for p in parts) / len(parts) * 100
 
+    wr = williams_r(price, hl)                                      # 관찰용 %R
     sig = compute_signals(price, vol, ma, gap20, sec_mask)
     up60 = _b(ma[60] > ma[60].shift(5))
     # 그날의 하락 경고/눌림: 정배열이던 종목에서 경보 2개 이상이 처음 켜진 날 (차트의 ▼·▽와 같은 기준)
@@ -1126,7 +1198,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
             m_prev, st_prev = sec_mask[s["id"]].loc[prev], sec_streak[s["id"]].loc[prev]
             items = [{"code": t, **info[t], "days": int(st[t]), "full": bool(full.loc[d, t]),
                       "gap": _r(gap20.loc[d, t]), "score": _r(score.loc[d, t], 0),
-                      "volr": _r(volr.loc[d, t], 2)}
+                      "volr": _r(volr.loc[d, t], 2), "wr": _r(wr.loc[d, t], 0)}
                      for t in m_today[m_today].index]
             dropped = [{"code": t, "name": info[t]["name"], "days": int(st_prev[t])}
                        for t in m_prev[m_prev & ~m_today].index]
@@ -1216,7 +1288,8 @@ def build(ix, price, vol, info, source, demo, updated, fund=None):
             f.unlink()
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap, rfires)
-    meta = {"regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
+    wr_summary = None if demo else forward_wr(ix["id"], price, wr, sec_mask["mid"], info, dates[-1].strftime("%Y-%m-%d"))
+    meta = {"regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "forward_wr": wr_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
             "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),
             "defs": {"early": EARLY, "exits": EXITS}, "rules": rgrades, "split": SPLIT}
@@ -1381,14 +1454,14 @@ def main():
     for ix in INDEXES:
         print(f"[{ix['name']}]  (+{time.time() - t0:.0f}초)")
         try:
-            price, vol, info, source = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps, name_map)
+            price, vol, info, source, hl = (fetch_demo if args.demo else fetch_real)(ix, sectors, caps, name_map)
             try:
                 fund = (demo_fund(price, np.random.default_rng(3)) if args.demo
                         else fetch_fundamentals(list(price.columns)))
             except Exception as e:
                 warn(f"{ix['name']} 재무 수집 실패(저평가 기능만 빠짐): {e}")
                 fund = None
-            sector_out[ix["id"]], summ = build(ix, price, vol, info, source, args.demo, updated, fund)
+            sector_out[ix["id"]], summ = build(ix, price, vol, info, source, args.demo, updated, fund, hl)
             summaries.append(summ)
             ok += 1
         except Exception as e:

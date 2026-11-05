@@ -161,6 +161,7 @@
   .fwd-list td { font-size: 12px; padding: 6px 3px; }
   @media (max-width: 520px) { .views { grid-template-columns: repeat(3, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
   .badge.val { background: var(--tab-on); color: var(--accent); }
+  .badge.wr { background: var(--tab-on); color: var(--muted); }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
@@ -227,13 +228,15 @@ const panel = () => document.getElementById('panel');
 // ---------------------------------------------------------- 정배열 탭
 const OVERHEAT = 15;   // 20일선 대비 +15% 이상이면 과열 배지
 const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo';
+const WR_PULL = -80;   // 윌리엄스 %R 이 이하면 '눌림' 배지 (관찰용)
+const wrBadge = it => it.wr != null && it.wr <= WR_PULL ? `<span class="badge wr" title="윌리엄스 %R(14일) ${it.wr} — 최근 14일 범위의 하단 20% (관찰용, 규칙 아님)">%R 눌림 ${it.wr}</span>` : '';
 function row(it) {
   const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
-    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
+    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}${wrBadge(it)}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
-    <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배">${it.score ?? '-'}</span></td>
+    <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배 · %R ${it.wr ?? '-'}">${it.score ?? '-'}</span></td>
     <td class="num">${fmtCap(it.cap)}</td></tr>`;
 }
 
@@ -443,6 +446,21 @@ function fwdTable(meta) {
       </tbody></table></div><div class="note">숫자는 같은 기간 구성종목 평균 대비. ‘N일째’는 아직 기간이 끝나지 않은 지금까지 성적입니다.</div></details>` : ''}`;
 }
 
+function wrTable(meta) {
+  const f = meta.forward_wr;
+  if (!f) return '';
+  const cell = r => r && r.n ? `<td class="num">${pctS(r.excess)}<br><span class="tag">${r.beat}% · ${r.n}건</span></td>` : '<td class="num tag">아직<br>없음</td>';
+  const tr = (label, g) => `<tr><td>${label}</td>${['5', '10', '20'].map(h => cell(f.h[g][h])).join('')}</tr>`;
+  return `<div class="sub-h">⑥ 관찰 — 정배열 + %R 눌림 (${f.since.slice(5)}~)</div>
+    <div class="rt-wrap"><table class="sc"><thead><tr><th>그룹</th><th class="num">5일 후</th><th class="num">10일 후</th><th class="num">20일 후</th></tr></thead>
+    <tbody>${tr('중기 정배열 전체', 'base')}${tr(`+ %R ${f.pull} 이하 진입<br><span class="tag">${f.events}건</span>`, 'pull')}</tbody></table></div>
+    <div class="note">래리 윌리엄스 %R(${f.n}일)을 추세 속 눌림목 판단에 쓸 만한지 보는 관찰입니다. 기존 규칙·등급에는 반영하지 않습니다. 아래 줄이 위 줄보다 꾸준히 높아야 의미가 있고, 최소 2~3개월은 쌓여야 판단할 수 있습니다. (평균 대비, 다음 날 종가 진입, 같은 종목은 20거래일에 1번)</div>
+    ${(f.items || []).length ? `<details class="defs"><summary>눌림 진입 종목 보기 (최근 ${f.items.length}건) ▾</summary>
+      <div class="rt-wrap"><table class="sc"><thead><tr><th>날짜 · 종목</th><th class="num">%R</th></tr></thead><tbody>
+      ${f.items.map(it => `<tr><td>${it.date.slice(5)} <a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a></td><td class="num">${it.wr}</td></tr>`).join('')}
+      </tbody></table></div></details>` : ''}`;
+}
+
 function rulesTable(meta) {
   if (!meta.rules) return '';
   const c = r => r ? `${pctS(r.excess)}<br><span class="tag">${r.beat}% · ${r.n}</span>` : '<span class="tag">-</span>';
@@ -490,6 +508,7 @@ function scoreTable(meta) {
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
     <div class="note">같은 달끼리 비교해 경보 종목이 확실히 <b>더 나빴으면 ✅</b>(팔아서 이득), 확실히 <b>더 좋았으면 ⚠️</b>(팔면 손해, 반등)입니다.</div>
     ${fwdTable(meta)}
+    ${wrTable(meta)}
     <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>
   </details></section>`;
