@@ -178,6 +178,15 @@
   .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .hold-hint { margin: 0 0 10px; }
+  .hero { border-width: 2px; } .hero .hh { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .hero .ha { font-size: 15px; line-height: 1.6; } .hero.cold { border-color: var(--dn); } .hero.good { border-color: var(--bot); background: var(--green-bg); }
+  .hero.hot { border-color: var(--top); } .hw { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: var(--muted); } .hw b { color: var(--text); }
+  .hgo { margin-top: 10px; } .hgo button, .lnk { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+  .hgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } .hgrid.two { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 520px) { .hgrid { grid-template-columns: repeat(2, 1fr); } }
+  .htile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; } .htile .hv { font-size: 19px; font-weight: 800; margin: 2px 0; }
+  .hsig { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; line-height: 1.8; font-size: 14px; }
+  .hsteps { margin: 0; padding-left: 20px; line-height: 1.9; font-size: 14px; }
   .confirm { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; cursor: pointer; font-size: 14px; }
   .confirm.on { border: 2px solid var(--green); background: var(--green-bg); }
   .confirm .cf { display: inline-block; margin: 4px 6px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
@@ -216,12 +225,13 @@
 </header>
 <main>
   <nav class="tabs" id="tabs">
-    <button data-tab="kr">국내 ETF</button>
-    <button data-tab="us">미국 주식/ETF</button>
+    <button data-tab="home">🏠 오늘 요약</button>
+    <button data-tab="kospi200">코스피200</button>
+    <button data-tab="kosdaq150">코스닥150</button>
     <button data-tab="gauge">🌡️ 바닥·고점</button>
-    <button data-tab="kospi200">코스피200 정배열</button>
-    <button data-tab="kosdaq150">코스닥150 정배열</button>
-    <button data-tab="sector">섹터 흐름</button>
+    <button data-tab="kr">국내 ETF</button>
+    <button data-tab="us">미국</button>
+    <button data-tab="sector">섹터</button>
   </nav>
   <div id="confirm"></div>
   <div id="panel"></div>
@@ -232,7 +242,7 @@ const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
 };
-const state = { vTrend: false, tab: 'kospi200', sort: 'days', q: '', view: 'today', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const state = { vTrend: false, tab: 'home', sort: 'days', q: '', view: 'today', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
 const PALETTE = {
   light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
   dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
@@ -1120,11 +1130,22 @@ async function renderGauge() {
                 y: { type: 'logarithmic', ticks: { color: css('--muted'), maxTicksLimit: 6, callback: v => Math.round(v).toLocaleString() }, grid: { color: css('--grid') } } } } }));
 }
 
+// 최신 VIX (어젯밤 미국 종가)와 최근 10거래일 최고값 — us_trend.json에서 바로 읽음
+function vixLatest(us) {
+  if (!us) return null;
+  for (const gr of us.groups) for (const se of gr.series) if (se.code === '^VIX') {
+    const c = se.close.filter(x => x != null); if (!c.length) return null;
+    return { now: +c[c.length - 1].toFixed(1), max10: +Math.max(...c.slice(-10)).toFixed(1), date: us.dates[us.dates.length - 1] };
+  }
+  return null;
+}
 // ---------------------------------------------------------- ✅ 바닥 확인 신호 배너 (모든 탭 맨 위)
 // '많이 빠졌다'가 아니라 '매도가 끝나고 돌아섰다'를 확인하는 두 신호: VIX 급등 후 꺾임, 체온계 회복
 async function renderConfirm() {
   const el = document.getElementById('confirm'); if (!el) return;
   let g; try { g = await getJSON('data/market_gauge.json'); } catch { el.innerHTML = ''; return; }
+  let usT = null; try { usT = await getJSON('data/us_trend.json'); } catch {}
+  const VX = vixLatest(usT);
   const k = g.markets.find(m => m.id === 'KOSPI') || g.markets[0];
   const lastEv = (m, id) => { const e = m.events.filter(x => x.id === id).pop(); return e ? e.date : null; };
   const on = [];
@@ -1132,7 +1153,7 @@ async function renderConfirm() {
     on.push({ m: m.name, id: t.id, name: t.name, date: lastEv(m, t.id) }); }));
   const vixOn = on.some(x => x.id === 'vix_turn');
   const uniq = on.filter((x, i) => x.id !== 'vix_turn' || on.findIndex(y => y.id === 'vix_turn') === i);
-  const n = k.now;
+  const n = VX ? { ...k.now, vix: VX.now, vix_max10: VX.max10 } : k.now;
   const vixProg = n.vix == null ? '' : n.vix_max10 >= 30
     ? `VIX 최근 10일 최고 <b>${n.vix_max10}</b> → 지금 <b>${n.vix}</b> (최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%, <b>−20%</b>가 되면 켜짐)`
     : `VIX 지금 <b>${n.vix}</b> · 최근 10일 최고 ${n.vix_max10} (<b>30</b>을 넘었다가 20% 꺾이면 켜짐)`;
@@ -1142,20 +1163,100 @@ async function renderConfirm() {
     ? `<div class="confirm on" data-go="gauge"><b>✅ 바닥 확인 신호가 켜졌습니다</b>
         ${uniq.map(x => `<span class="cf">${x.id === 'vix_turn' ? 'VIX 급등 후 꺾임' : x.m + ' 체온계 회복'}${x.date ? ` (${x.date.slice(5).replace('-', '/')})` : ''}</span>`).join('')}
         <div class="cfn">‘매도가 끝나고 돌아섰다’는 확인 신호입니다. 그래도 한 번에 사지 말고 나눠서, 손절선을 먼저 정하세요. 과거 성적은 🌡️ 바닥·고점 탭에서 확인하세요.</div></div>`
-    : `<div class="confirm" data-go="gauge"><b>⏳ 바닥 확인 신호 대기 중</b> <span class="tag">(${k.to} 기준)</span>
-        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}${brProg ? '' : '<br><span class="tag">체온계 회복은 과거 검증에서 맞지 않아 확인 신호에서 뺐습니다</span>'}</div></div>`;
+    : `<div class="confirm" data-go="gauge"><b>⏳ 바닥 확인 신호 대기 중</b> <span class="tag">(VIX는 ${VX ? VX.date.slice(5).replace('-', '/') : k.to.slice(5)} 미국 종가 기준)</span>
+        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}</div></div>`;
   el.querySelector('.confirm').onclick = () => { if (state.tab !== 'gauge') { state.tab = 'gauge'; location.hash = 'gauge'; render(); } };
+}
+
+// ---------------------------------------------------------- 🏠 오늘 요약 (한 화면에 결론만)
+async function renderHome() {
+  const tryJ = async u => { try { return await getJSON(u); } catch { return null; } };
+  const [g, us, kr] = await Promise.all([tryJ('data/market_gauge.json'), tryJ('data/us_trend.json'), tryJ('data/kr_trend.json')]);
+  const ix = {};
+  for (const [k, v] of Object.entries(INDEX)) {
+    const meta = await tryJ(v.dir + 'dates.json'); if (!meta) continue;
+    ix[k] = { meta, data: await tryJ(v.dir + meta.dates[0] + '.json') };
+  }
+  if (state.tab !== 'home') return;
+  const pc = v => v == null ? '-' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+  const chg = (trend, name) => { if (!trend) return null; for (const gr of trend.groups) for (const se of gr.series) if (se.name === name) {
+      const c = se.close.filter(x => x != null); return c.length > 1 ? { last: c[c.length - 1], d: (c[c.length - 1] / c[c.length - 2] - 1) * 100 } : null; } return null; };
+  // 1) 오늘의 결론
+  const K = g && (g.markets.find(m => m.id === 'KOSPI') || g.markets[0]);
+  const T = K ? Object.fromEntries(K.tests.map(t => [t.id, t])) : {};
+  const ok = id => T[id] && gaugeJudge(T[id])[0] === 'ok';
+  const br = Object.entries(ix).map(([k, v]) => { const b = v.meta.breadth; const sh = b && b.short; return { k, name: INDEX[k].name, now: sh ? sh[sh.length - 1] : null, d5: sh && sh.length > 5 ? sh[sh.length - 1] - sh[sh.length - 6] : null }; });
+  const cold = br.some(b => b.now != null && b.now <= 20);
+  const stage1 = K && ((K.now.gap != null && K.now.gap <= -10) || (K.now.dd != null && K.now.dd <= -20));
+  const stage2 = ok('vix_turn') && T.vix_turn.active;
+  const hot = ['gap_hi', 'vix_calm', 'br_dn'].some(id => ok(id) && T[id].active);
+  let cls, head, advice;
+  if (stage2) { cls = 'good'; head = '✅ 바닥 확인 신호가 켜졌습니다'; advice = '매도가 끝나고 돌아섰다는 신호입니다. <b>나눠서</b> 사는 것을 검토할 수 있는 구간입니다. 사기 전에 손절선부터 정하세요.'; }
+  else if (stage1 || cold) { cls = 'cold'; head = '🧊 지금은 관찰 구간입니다'; advice = '시장이 많이 빠져 있지만, 돌아섰다는 확인은 아직 없습니다. <b>새로 사기보다 지켜보고</b>, 가진 종목은 손절선을 점검할 때입니다.'; }
+  else if (hot) { cls = 'hot'; head = '🔥 과열 주의'; advice = '과거에 맞았던 고점 경고가 켜져 있습니다. 새로 살 때 비중을 줄이고 손절선을 꼭 정하세요.'; }
+  else { cls = 'mid'; head = '🙂 평소 구간입니다'; advice = '검증된(A·B) 신호 위주로, 과열 배지가 없는 종목만 보세요.'; }
+  const why = [];
+  if (K && K.now.dd != null) why.push(`코스피 1년 최고가 대비 <b>${K.now.dd}%</b>${K.now.dd <= -20 ? ' (많이 빠짐)' : ''}`);
+  br.forEach(b => b.now != null && why.push(`${b.name} 체온계 <b>${b.now}%</b>${b.now <= 20 ? ' (약세장)' : b.now >= 50 ? ' (강세장)' : ''}${b.d5 != null ? ` · 5일 ${b.d5 > 0 ? '+' : ''}${b.d5.toFixed(1)}%p` : ''}`));
+  const VX = vixLatest(us);
+  if (VX) why.push(`VIX 공포지수 <b>${VX.now}</b> (어젯밤 미국) — ${stage2 ? '공포 정점을 지나 꺾임' : VX.max10 >= 30 ? `공포 급등 중 (최근 최고 ${VX.max10}). 최고점에서 20% 꺾이면 확인 신호` : VX.now >= 25 ? '불안이 커지는 중. 30을 넘었다가 꺾이면 확인 신호' : '아직 공포 급등 없음'}`);
+  // 2) 어제 시장
+  const mk = [['코스피', chg(kr, '코스피')], ['코스닥', chg(kr, '코스닥')]];
+  const usk = [['S&P 500', chg(us, 'S&P500')], ['나스닥', chg(us, '나스닥 종합')], ['반도체', chg(us, '필라델피아 반도체')], ['VIX', chg(us, 'VIX 공포지수')]];
+  const usDate = us ? us.dates[us.dates.length - 1].slice(5).replace('-', '/') : '';
+  const tile = ([n, v], inv) => `<div class="htile"><div class="tag">${n}</div><div class="hv">${v ? (v.last >= 1000 ? Math.round(v.last).toLocaleString() : v.last.toFixed(2)) : '-'}</div><div>${v ? (inv ? `<span class="${v.d > 0 ? 'ret-dn' : 'ret-up'}">${v.d > 0 ? '+' : ''}${v.d.toFixed(2)}%</span>` : pc(v.d)) : ''}</div></div>`;
+  // 3) 오늘 신호
+  const sigs = Object.entries(ix).map(([k, v]) => {
+    const t = (v.data && v.data.today) || [];
+    const up = t.filter(x => x.u && x.g !== 'C'), dn = t.filter(x => x.d === 'down'), pl = t.filter(x => x.d === 'pull');
+    const nm = arr => arr.slice(0, 4).map(x => esc(x.name)).join(', ') + (arr.length > 4 ? ` 외 ${arr.length - 4}` : '');
+    return `<div class="hsig" data-go="${k}"><b>${INDEX[k].name}</b>
+      <div><span class="tri-up">▲ 상승 초입 ${up.length}</span>${up.length ? ` <span class="tag">${nm(up)}</span>` : ''}</div>
+      <div><span class="tri-dn">▼ 하락 경고 ${dn.length}</span>${dn.length ? ` <span class="tag">${nm(dn)}</span>` : ''} · <span class="tri-pull">▽ 눌림 ${pl.length}</span></div></div>`;
+  }).join('');
+  // 4) 내 종목
+  const mine = loadH();
+  let holdTxt = '<span class="tag">등록된 종목이 없습니다. 종목 차트 아래 ‘내 종목에 추가’로 등록하면 여기서 손절선 상태를 알려 줍니다.</span>';
+  if (mine.length) {
+    const cnt = { r: 0, y: 0, g: 0, x: 0 }, red = [];
+    for (const k of Object.keys(INDEX)) {
+      const my = mine.filter(h => h.ix === k); if (!my.length) continue;
+      const cd = await tryJ(INDEX[k].dir + 'charts.json');
+      my.forEach(h => { const st = cd && cd.stocks[h.code]; const cs = st ? st.c.filter(v => v != null) : []; const cur = cs[cs.length - 1];
+        if (cur == null) cnt.x++; else if (cur <= h.stop) { cnt.r++; red.push(h.name); } else if (cur / h.stop - 1 < 0.05) cnt.y++; else cnt.g++; });
+    }
+    holdTxt = `${cnt.r ? `<div class="alert danger" style="margin:0 0 6px"><b>🔴 손절선 이탈: ${red.map(esc).join(', ')}</b>미리 정한 규칙대로라면 정리할 시점입니다.</div>` : ''}
+      🔴 이탈 ${cnt.r} · 🟡 근접 ${cnt.y} · 🟢 여유 ${cnt.g}${cnt.x ? ` · 가격 없음 ${cnt.x}` : ''}`;
+  }
+  panel().innerHTML = `
+    <section class="hero ${cls}"><div class="hh">${head}</div><div class="ha">${advice}</div>
+      <ul class="hw">${why.map(w => `<li>${w}</li>`).join('')}</ul>
+      <div class="hgo"><button data-go="gauge">🌡️ 바닥·고점 자세히 →</button></div></section>
+    <section><div class="sec-head"><h2>📊 어제 시장</h2><span class="count">한국 ${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : ''} · 미국 ${usDate} (현지)</span></div>
+      <div class="hgrid two">${mk.map(x => tile(x)).join('')}</div>
+      <div class="hgrid" style="margin-top:8px">${usk.map(x => tile(x)).join('')}</div>
+      <div class="note">VIX가 오르면 미국 시장의 불안이 커졌다는 뜻입니다. <button class="lnk" data-go="us">미국 자세히 →</button> <button class="lnk" data-go="kr">국내 ETF 자세히 →</button></div></section>
+    <section><div class="sec-head"><h2>🔔 어제 장 마감 신호</h2><span class="count">누르면 해당 탭으로</span></div>${sigs}
+      ${cold ? '<div class="note" style="margin-top:6px">⚠️ 지금은 약세장이라 ▲ 신호의 과거 성적이 평소보다 나빴습니다. 관찰 위주로 보세요.</div>' : ''}</section>
+    <section><div class="sec-head"><h2>💼 내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
+    <section><div class="sec-head"><h2>📋 매일 보는 순서</h2></div>
+      <ol class="hsteps"><li>위 <b>결론 상자</b>로 오늘 시장이 관찰 구간인지 확인</li><li><b>💼 내 종목</b>에 🔴가 있으면 정한 대로 정리</li>
+      <li>관찰 구간이 아니면 <b>🔔 신호</b>에서 ▲ 종목을 눌러 차트·손절선 확인 (과열·큰 흐름 하락 배지는 피하기)</li><li>한 달에 한 번 성적표의 <b>실전 기록</b> 확인</li></ol></section>`;
+  panel().querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+    state.tab = b.dataset.go; if (INDEX[state.tab]) state.view = 'today';
+    try { history.replaceState(null, '', '#' + state.tab); } catch {} render(); window.scrollTo(0, 0); });
 }
 
 // ---------------------------------------------------------- 공통
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  renderConfirm();
+  if (state.tab === 'home' || state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();
     else if (state.tab === 'gauge') await renderGauge();
+    else if (state.tab === 'home') await renderHome();
     else await renderTrend(state.tab);
   } catch (e) {
     panel().innerHTML = '<div class="empty">데이터를 불러오지 못했습니다.</div>';
@@ -1170,7 +1271,9 @@ async function header() {
   for (const [k, v] of [['us','미국'],['kr','국내 ETF']]) {
     try { const m = await getJSON(`data/${k}_trend.json`); parts.unshift(`${v} ${fmtTime(m.updated)}`); } catch {}
   }
-  document.getElementById('updated').textContent = parts.length ? '마지막 업데이트 — ' + parts.join(' / ') : '데이터 없음';
+  let base = '';
+  try { const m = await getJSON(INDEX.kospi200.dir + 'dates.json'); base = `<b>${m.dates[0].slice(5).replace('-', '/')} 장 마감 기준</b> · 업데이트 ${fmtTime(m.updated)}`; } catch {}
+  document.getElementById('updated').innerHTML = base || (parts.length ? '마지막 업데이트 — ' + parts.join(' / ') : '데이터 없음');
 }
 
 document.getElementById('tabs').onclick = e => {
