@@ -352,8 +352,10 @@ function thermo(meta, ix) {
   const s = last('short'), sd = s - ago('short');
   const mood = s >= 50 && sd >= 0 ? '🔥 추세 확산 — 정배열 신호를 적극적으로 볼 만한 국면'
     : s >= 50 ? '⚠️ 넓게 퍼졌지만 줄어드는 중 — 신규 진입은 신중하게'
+    : s <= 20 && sd > 0 ? '🌱 약세장 속 소폭 회복 — 아직 20% 아래라 관찰 구간'
+    : s <= 20 ? '❄️ 약세장 — 정배열 종목이 적고 줄어드는 중 (관찰 구간)'
     : sd > 0 ? '🌱 회복 중 — 정배열 종목이 늘어나는 초기'
-    : '❄️ 약세 국면 — 정배열 종목이 적고 줄어드는 중';
+    : '☁️ 보통 — 뚜렷한 방향 없음';
   return `<section>
     <div class="sec-head"><h2>시장 체온계</h2><span class="count">${ix.name} 중 정배열 비율</span></div>
     <div class="mood">${mood}</div>
@@ -751,13 +753,13 @@ async function renderSector() {
         `<button data-k="${k}" class="${state.sectorIx === k ? 'on' : ''}">${v.name}</button>`).join('')}</div>
       <div class="seg" id="ss">${[['short','단기 정배열'],['mid','중기 정배열']].map(([k, l]) =>
         `<button data-k="${k}" class="${state.sectorSec === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="note">섹터별 정배열 종목 수 (최근 ${dates.length}거래일) · 5일 변화 = 오늘 − 5거래일 전</div>
+      <div class="note">섹터별 정배열 종목 수 · <b>왼쪽이 최신</b>(최근 ${dates.length}거래일) · 5일 변화 = 최신 − 5거래일 전</div>
     </div>
     <section class="heat">
       ${rows.length ? `<table>
-        <thead><tr><th>섹터</th>${dates.map(x => `<th class="c">${x.slice(5).replace('-', '/')}</th>`).join('')}<th class="num">5일 변화</th><th class="num">구성</th></tr></thead>
-        <tbody>${rows.map(r => `<tr><td class="sname" title="${esc(r.name)}">${esc(r.name)}</td>${r.a.map(cell).join('')}
-          <td class="num ${r.delta > 0 ? 'delta-up' : r.delta < 0 ? 'delta-dn' : ''}">${r.delta > 0 ? '+' : ''}${r.delta}</td>
+        <thead><tr><th>섹터</th><th class="num">5일 변화</th>${dates.slice().reverse().map((x, i) => `<th class="c">${i === 0 ? '<b>' + x.slice(5).replace('-', '/') + '</b>' : x.slice(5).replace('-', '/')}</th>`).join('')}<th class="num">구성</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td class="sname" title="${esc(r.name)}">${esc(r.name)}</td>
+          <td class="num ${r.delta > 0 ? 'delta-up' : r.delta < 0 ? 'delta-dn' : ''}">${r.delta > 0 ? '+' : ''}${r.delta}</td>${r.a.slice().reverse().map(cell).join('')}
           <td class="num tag">${r.total}</td></tr>`).join('')}</tbody></table>`
         : '<div class="empty">정배열 종목이 없습니다.</div>'}
     </section>`;
@@ -1232,11 +1234,11 @@ async function renderHome() {
     <section class="hero ${cls}"><div class="hh">${head}</div><div class="ha">${advice}</div>
       <ul class="hw">${why.map(w => `<li>${w}</li>`).join('')}</ul>
       <div class="hgo"><button data-go="gauge">🌡️ 바닥·고점 자세히 →</button></div></section>
-    <section><div class="sec-head"><h2>📊 어제 시장</h2><span class="count">한국 ${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : ''} · 미국 ${usDate} (현지)</span></div>
+    <section><div class="sec-head"><h2>📊 최근 장 마감</h2><span class="count">한국 ${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : ''} · 미국 ${usDate} (현지)</span></div>
       <div class="hgrid two">${mk.map(x => tile(x)).join('')}</div>
       <div class="hgrid" style="margin-top:8px">${usk.map(x => tile(x)).join('')}</div>
       <div class="note">VIX가 오르면 미국 시장의 불안이 커졌다는 뜻입니다. <button class="lnk" data-go="us">미국 자세히 →</button> <button class="lnk" data-go="kr">국내 ETF 자세히 →</button></div></section>
-    <section><div class="sec-head"><h2>🔔 어제 장 마감 신호</h2><span class="count">누르면 해당 탭으로</span></div>${sigs}
+    <section><div class="sec-head"><h2>🔔 장 마감 신호</h2><span class="count">${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') + ' 기준 · ' : ''}누르면 해당 탭으로</span></div>${sigs}
       ${cold ? '<div class="note" style="margin-top:6px">⚠️ 지금은 약세장이라 ▲ 신호의 과거 성적이 평소보다 나빴습니다. 관찰 위주로 보세요.</div>' : ''}</section>
     <section><div class="sec-head"><h2>💼 내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
     <section><div class="sec-head"><h2>📋 매일 보는 순서</h2></div>
