@@ -178,6 +178,12 @@
   .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .hold-hint { margin: 0 0 10px; }
+  .gcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 700px) { .gcards { grid-template-columns: repeat(2, 1fr); } }
+  .gcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
+  .gcard .gt { font-size: 13px; color: var(--muted); font-weight: 600; } .gcard .gv { font-size: 24px; font-weight: 800; }
+  .gz { align-self: flex-start; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .gz.lo { background: var(--up); color: #fff; } .gz.hi { background: var(--dn); color: #fff; } .gz.mid { background: var(--grid); color: var(--text); }
   .badge.dnb { background: var(--dn); color: #fff; }
   .sc td:first-child { min-width: 108px; }
   .notice a { color: inherit; font-weight: 700; }
@@ -195,6 +201,7 @@
   <nav class="tabs" id="tabs">
     <button data-tab="kr">국내 ETF</button>
     <button data-tab="us">미국 주식/ETF</button>
+    <button data-tab="gauge">🌡️ 바닥·고점</button>
     <button data-tab="kospi200">코스피200 정배열</button>
     <button data-tab="kosdaq150">코스닥150 정배열</button>
     <button data-tab="sector">섹터 흐름</button>
@@ -995,6 +1002,89 @@ document.addEventListener('click', e => {
   openChart(state.tab, a.dataset.code);
 });
 
+// ---------------------------------------------------------- 🌡️ 바닥·고점 지표판
+async function renderGauge() {
+  let g;
+  try { g = await getJSON('data/market_gauge.json'); }
+  catch { panel().innerHTML = '<div class="empty">바닥·고점 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>'; return; }
+  if (state.tab !== 'gauge') return;
+  state.gm = state.gm && g.markets.some(m => m.id === state.gm) ? state.gm : g.markets[0].id;
+  const m = g.markets.find(x => x.id === state.gm);
+  const n = m.now;
+  const zone = (z, txt) => `<span class="gz ${z}">${txt}</span>`;
+  const act = id => (m.tests.find(t => t.id === id) || {}).active;
+  const cards = [
+    ['지수 위치', n.gap == null ? '-' : (n.gap > 0 ? '+' : '') + n.gap + '%', '120일선 대비',
+      n.gap == null ? '' : n.gap <= -10 ? zone('lo', '바닥권') : n.gap >= 15 ? zone('hi', '고점권(과열)') : zone('mid', '중립')],
+    ['고점 대비', n.dd == null ? '-' : n.dd + '%', '최근 1년 최고가 대비',
+      n.dd == null ? '' : n.dd <= -20 ? zone('lo', '바닥권(약세장)') : n.dd >= -5 ? zone('mid', '고점 근처') : zone('mid', '조정 중')],
+    ['VIX 공포지수', n.vix ?? '-', `최근 10일 최고 ${n.vix_max10 ?? '-'}`,
+      n.vix == null ? '' : act('vix_turn') ? zone('lo', '공포 정점 통과') : n.vix >= 30 ? zone('lo', '공포 (아직 진행 중)') : n.vix < 13 ? zone('hi', '방심') : zone('mid', '중립')],
+    ['체온계', n.breadth == null ? '-' : n.breadth + '%', '단기 정배열 종목 비율',
+      n.breadth == null ? '' : act('br_up') ? zone('lo', '바닥에서 회복') : n.breadth <= 10 ? zone('lo', '바닥권') : n.breadth >= 70 ? zone('hi', '고점권') : zone('mid', '중립')],
+  ];
+  const lo = m.tests.filter(t => t.kind === '바닥' && t.active).length, hi = m.tests.filter(t => t.kind === '고점' && t.active).length;
+  const verdict = lo && !hi ? `<b class="ret-dn">바닥 쪽 신호 ${lo}개</b>가 최근 5일 안에 켜져 있습니다.` : hi && !lo ? `<b class="ret-up">고점 쪽 신호 ${hi}개</b>가 최근 5일 안에 켜져 있습니다.` : lo && hi ? `바닥 쪽 ${lo}개, 고점 쪽 ${hi}개 신호가 엇갈립니다.` : '지금은 바닥·고점 신호가 모두 꺼져 있습니다 (중립).';
+  const cell = (r, wide) => r && r.n ? `<td class="num${wide ? '' : ' y1'}">${r.avg > 0 ? '+' : ''}${r.avg}%<br><span class="tag">상승 ${r.win}% · ${r.n}번</span></td>` : `<td class="num tag${wide ? '' : ' y1'}">사례 없음</td>`;
+  const base = m.tests[0].h;
+  const vs = t => { const r = t.h['60']; if (!r || !r.n || r.n < 3) return '<span class="tag">사례 적음</span>';
+    const d = r.avg - r.base; return t.kind === '바닥' ? (d > 1 ? '<span class="ret-up">평소보다 ↑</span>' : '<span class="tag">평소와 비슷/↓</span>')
+      : (d < -1 ? '<span class="ret-dn">평소보다 ↓ (경고 유효)</span>' : '<span class="tag">평소와 비슷/↑</span>'); };
+  const NAMES = Object.fromEntries(m.tests.map(t => [t.id, t.name]));
+  const evs = m.events.slice().reverse();
+  panel().innerHTML = `
+    ${g.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
+    <div class="controls">
+      <div class="seg" id="gm">${g.markets.map(x => `<button data-k="${x.id}" class="${x.id === m.id ? 'on' : ''}">${x.name}</button>`).join('')}</div>
+      <div class="note">${m.name} 지수 ${m.to} 종가 <b>${m.last.toLocaleString()}</b> · 검증 기간 ${m.from.slice(0, 4)}~${m.to.slice(0, 4)}년 (체온계는 최근 5년)</div>
+    </div>
+    <section>
+      <div class="sec-head"><h2>🌡️ 지금 ${m.name}은 어디쯤?</h2></div>
+      <div class="gcards">${cards.map(([t, v, sub, z]) => `<div class="gcard"><div class="gt">${t}</div><div class="gv">${v}</div><div class="tag">${sub}</div>${z}</div>`).join('')}</div>
+      <div class="note" style="margin-top:10px">${verdict} 아래 표에서 각 신호가 과거에 실제로 맞았는지 확인하세요.</div>
+    </section>
+    <section>
+      <div class="sec-head"><h2>📈 ${m.name} 지수와 과거 신호</h2><span class="count">주간 종가 · 로그 눈금</span></div>
+      <div class="legend"><span><span class="ret-up">▲</span> 바닥 신호</span><span><span class="ret-dn">▼</span> 고점 신호</span></div>
+      <div style="position:relative;height:300px"><canvas id="gch"></canvas></div>
+    </section>
+    <section>
+      <div class="sec-head"><h2>✅ 신호 검증 — 신호 다음 날 지수를 샀다면</h2></div>
+      <div class="rt-wrap"><table class="sc rt"><thead><tr><th>신호</th><th class="num y1">20일 뒤</th><th class="num">60일 뒤</th><th class="num">120일 뒤</th></tr></thead><tbody>
+        <tr class="base"><td><b>평소 (아무 날이나)</b></td><td class="num y1">${base['20'].base > 0 ? '+' : ''}${base['20'].base}%<br><span class="tag">상승 ${base['20'].base_win}%</span></td>
+          <td class="num">${base['60'].base > 0 ? '+' : ''}${base['60'].base}%<br><span class="tag">상승 ${base['60'].base_win}%</span></td>
+          <td class="num">${base['120'].base > 0 ? '+' : ''}${base['120'].base}%<br><span class="tag">상승 ${base['120'].base_win}%</span></td></tr>
+        ${m.tests.map(t => `<tr><td style="white-space:normal"><span class="${t.kind === '바닥' ? 'ret-up' : 'ret-dn'}">${t.kind === '바닥' ? '▲' : '▼'}</span> ${esc(t.name)}${t.active ? ' <span class="badge hot">지금 켜짐</span>' : ''}<br>${vs(t)}${t.from > m.from ? ` <span class="tag">· ${t.from.slice(0, 4)}년부터</span>` : ''}</td>
+          ${cell(t.h['20'])}${cell(t.h['60'], 1)}${cell(t.h['120'], 1)}</tr>`).join('')}
+      </tbody></table></div>
+      <div class="note">같은 신호는 ${g.cool}거래일(약 3개월)에 한 번만 셉니다. 신호가 뜬 <b>다음 날 종가</b>에 지수를 샀다고 가정했습니다.
+        바닥 신호는 평소보다 <b>높아야</b>, 고점 신호는 평소보다 <b>낮아야</b> 쓸모가 있습니다. 20년이어도 신호는 몇 번~십여 번뿐이라 <b>참고 자료</b>입니다. 특히 ‘사례 적음’은 믿지 마세요.</div>
+    </section>
+    <section><details>
+      <summary><div class="sec-head"><h2>📅 과거 신호 날짜</h2><span class="count">${evs.length}건 · 펼치기</span></div></summary>
+      <div class="rt-wrap"><table class="sc"><thead><tr><th>날짜 · 신호</th><th class="num">60일 뒤</th><th class="num">120일 뒤</th></tr></thead><tbody>
+        ${evs.map(e => `<tr><td>${e.date} <span class="${e.kind === '바닥' ? 'ret-up' : 'ret-dn'}">${e.kind === '바닥' ? '▲' : '▼'}</span><br><span class="tag">${esc(NAMES[e.id] || e.id)}</span></td>
+          <td class="num">${e.r60 == null ? '<span class="tag">진행 중</span>' : pctS(e.r60)}</td><td class="num">${e.r120 == null ? '<span class="tag">진행 중</span>' : pctS(e.r120)}</td></tr>`).join('')}
+      </tbody></table></div></details></section>`;
+  document.getElementById('gm').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.gm = b.dataset.k; render(); };
+  if (!window.Chart) return;
+  const W = m.weekly, wd = W.dates;
+  const wi = d => { let lo = 0, hi = wd.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (wd[mid] < d) lo = mid + 1; else hi = mid; } return lo; };
+  const up = new Array(wd.length).fill(null), dn = new Array(wd.length).fill(null), lab = {};
+  m.events.forEach(e => { const i = wi(e.date); (lab[i] = lab[i] || []).push(NAMES[e.id]);
+    if (e.kind === '바닥') up[i] = W.close[i] * 0.93; else dn[i] = W.close[i] * 1.07; });
+  charts.push(new Chart(document.getElementById('gch'), { type: 'line',
+    data: { labels: wd, datasets: [
+      { label: m.name, data: W.close, borderColor: css('--text'), borderWidth: 1.4, pointRadius: 0, tension: 0.1 },
+      { label: '바닥 신호', data: up, showLine: false, pointStyle: 'triangle', pointRadius: 6, backgroundColor: css('--up'), borderColor: css('--up') },
+      { label: '고점 신호', data: dn, showLine: false, pointStyle: 'triangle', rotation: 180, pointRadius: 6, backgroundColor: css('--dn'), borderColor: css('--dn') }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { filter: it => it.raw != null, backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'), borderColor: css('--line'), borderWidth: 1,
+        callbacks: { label: it => it.datasetIndex === 0 ? ` ${m.name} ${Math.round(it.raw).toLocaleString()}` : ` ${(lab[it.dataIndex] || []).join(', ')}` } } },
+      scales: { x: { ticks: { color: css('--muted'), maxTicksLimit: 6, maxRotation: 0, callback: (v, i) => wd[i].slice(0, 4) }, grid: { color: css('--grid') } },
+                y: { type: 'logarithmic', ticks: { color: css('--muted'), maxTicksLimit: 6, callback: v => Math.round(v).toLocaleString() }, grid: { color: css('--grid') } } } } }));
+}
+
 // ---------------------------------------------------------- 공통
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
@@ -1002,6 +1092,7 @@ async function render() {
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();
+    else if (state.tab === 'gauge') await renderGauge();
     else await renderTrend(state.tab);
   } catch (e) {
     panel().innerHTML = '<div class="empty">데이터를 불러오지 못했습니다.</div>';

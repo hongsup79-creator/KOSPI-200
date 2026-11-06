@@ -1197,6 +1197,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
     lvl2 = _b(sig["wcount"] >= 2) & sig["was_aligned"]
     sell_ev = dedupe(lvl2 & ~lvl2.shift(1, fill_value=False))
     mshort, ew = market_series(price, sec_mask)
+    BREADTH_FULL[ix["id"]] = mshort
     regime = regime_flags(mshort, ew)
     val = value_panel(price, info, fund)
     rfires = rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val)
@@ -1410,6 +1411,130 @@ def build_trend(market, groups, demo, updated):
     print(f"  저장 완료: {market}_trend.json (묶음 {len(out_groups)}개, 최신 {out['dates'][-1]})")
 
 
+# ---------------------------------------------------------------- 🌡️ 바닥·고점 지표판 (시장 전체)
+BREADTH_FULL = {}          # 지수별 단기 정배열 비율(전체 기간) — build()가 채움
+GAUGE_DAYS = 5200          # 약 20년
+GAUGE_COOL = 60            # 같은 신호는 60거래일(약 3개월)에 1번만 셈 → 서로 다른 '국면'으로 셈
+GAUGE_H = [20, 60, 120]
+
+
+def _episodes(flag, cool=GAUGE_COOL):
+    """True가 처음 켜진 날만, 앞 신호와 cool일 이상 떨어진 것만"""
+    f = flag.fillna(False).astype(bool).to_numpy()
+    out, last = np.zeros(len(f), bool), -10 ** 9
+    for i in range(1, len(f)):
+        if f[i] and not f[i - 1] and i - last >= cool:
+            out[i], last = True, i
+    return pd.Series(out, index=flag.index)
+
+
+def _fwd_stats(px, ev):
+    """신호 다음 날 종가에 지수를 샀다면 20·60·120일 뒤 수익률 vs 아무 날이나 샀을 때"""
+    res = {}
+    for h in GAUGE_H:
+        f = (px.shift(-(1 + h)) / px.shift(-1) - 1) * 100
+        base = f.dropna()
+        v = f[ev].dropna()
+        res[str(h)] = {"n": int(len(v)), "avg": _r(v.mean(), 1) if len(v) else None,
+                       "win": _r((v > 0).mean() * 100, 0) if len(v) else None,
+                       "base": _r(base.mean(), 1), "base_win": _r((base > 0).mean() * 100, 0)}
+    return res
+
+
+def _vix_on(dates, vix):
+    """한국 날짜 t에 쓸 수 있는 VIX = t 이전 마지막 미국 종가"""
+    if vix is None or not len(vix):
+        return pd.Series(np.nan, index=dates)
+    idx = np.searchsorted(vix.index.values, dates.values, side="left") - 1
+    vals = np.where(idx >= 0, vix.to_numpy()[np.clip(idx, 0, None)], np.nan)
+    return pd.Series(vals, index=dates)
+
+
+def gauge_signals(px, vix_k, breadth=None):
+    ma120 = px.rolling(120, min_periods=120).mean()
+    gap = (px / ma120 - 1) * 100
+    dd = (px / px.rolling(252, min_periods=60).max() - 1) * 100
+    vmax10 = vix_k.rolling(10, min_periods=1).max()
+    sig = {
+        "gap_lo": ("바닥", "120일선 대비 −10% 아래로 하락", gap <= -10),
+        "dd20": ("바닥", "1년 고점 대비 −20% 이상 하락", dd <= -20),
+        "vix_turn": ("바닥", "VIX 30 이상 급등 후 20% 이상 꺾임", (vmax10 >= 30) & (vix_k <= vmax10 * 0.8)),
+        "gap_hi": ("고점", "120일선 대비 +15% 위로 과열", gap >= 15),
+        "vix_calm": ("고점", "VIX 13 아래 (방심)", vix_k < 13),
+    }
+    if breadth is not None:
+        b = breadth.reindex(px.index)
+        bmin10, bmax10 = b.rolling(10, min_periods=1).min(), b.rolling(10, min_periods=1).max()
+        sig["br_up"] = ("바닥", "체온계 10% 이하 → 20% 이상 회복", (bmin10 <= 10) & (b >= 20))
+        sig["br_dn"] = ("고점", "체온계 70% 이상 → 50% 아래로 꺾임", (bmax10 >= 70) & (b < 50))
+    now = {"gap": _r(gap.iloc[-1], 1), "dd": _r(dd.iloc[-1], 1), "vix": _r(vix_k.iloc[-1], 1),
+           "vix_max10": _r(vmax10.iloc[-1], 1),
+           "breadth": None if breadth is None else _r(breadth.reindex(px.index).iloc[-1], 1)}
+    return sig, now
+
+
+def build_gauge(demo, updated):
+    """코스피·코스닥 지수 약 20년 + VIX로 바닥·고점 신호를 검증하고 오늘 위치를 저장"""
+    if demo:
+        rng = np.random.default_rng(11)
+        days = pd.bdate_range(end=datetime.now(KST).date(), periods=GAUGE_DAYS)
+        idx = {k: pd.Series(1000 * np.exp(np.cumsum(rng.normal(0.0003, 0.012, len(days)))), index=days)
+               for k in ("KOSPI", "KOSDAQ")}
+        vix = pd.Series(np.clip(18 + np.cumsum(rng.normal(0, 1.2, len(days))) * 0.3, 9, 80), index=days)
+    else:
+        idx = {}
+        for k in ("KOSPI", "KOSDAQ"):
+            try:
+                df = naver_history(k, GAUGE_DAYS)
+                idx[k] = df["close"].replace(0, np.nan).dropna()
+            except Exception as e:
+                warn(f"{k} 지수 이력 실패: {e}")
+        try:
+            import yfinance as yf
+            raw = yf.download("^VIX", period="25y", interval="1d", auto_adjust=True, progress=False)
+            v = raw["Close"]
+            v = v.iloc[:, 0] if isinstance(v, pd.DataFrame) else v
+            v.index = pd.to_datetime(v.index).tz_localize(None).normalize()
+            vix = v.dropna().sort_index()
+        except Exception as e:
+            warn(f"VIX 이력 실패: {e}")
+            vix = None
+    out = {"updated": updated, "demo": demo, "cool": GAUGE_COOL, "markets": []}
+    for k, name, bid in (("KOSPI", "코스피", "kospi200"), ("KOSDAQ", "코스닥", "kosdaq150")):
+        px = idx.get(k)
+        if px is None or len(px) < 300:
+            continue
+        px = drop_intraday(px.to_frame("c"))["c"]
+        vix_k = _vix_on(px.index, vix)
+        br = BREADTH_FULL.get(bid)
+        sig, now = gauge_signals(px, vix_k, br)
+        tests, events = [], []
+        for sid, (kind, label, flag) in sig.items():
+            ev = _episodes(flag)
+            tests.append({"id": sid, "kind": kind, "name": label, "h": _fwd_stats(px, ev),
+                          "from": (br.dropna().index[0] if sid.startswith("br") and br is not None else
+                                   (vix_k.dropna().index[0] if sid.startswith("vix") else px.index[0])).strftime("%Y-%m-%d"),
+                          "active": bool(flag.fillna(False).iloc[-5:].any())})
+            pos = {d: i for i, d in enumerate(px.index)}
+            for d in ev[ev].index:
+                i = pos[d]
+                e = {"date": d.strftime("%Y-%m-%d"), "id": sid, "kind": kind}
+                for h in (60, 120):
+                    if i + 1 + h < len(px):
+                        e[f"r{h}"] = _r((px.iloc[i + 1 + h] / px.iloc[i + 1] - 1) * 100, 1)
+                events.append(e)
+        wk = px.resample("W-FRI").last().dropna()
+        out["markets"].append({
+            "id": k, "name": name, "from": px.index[0].strftime("%Y-%m-%d"), "to": px.index[-1].strftime("%Y-%m-%d"),
+            "last": _r(px.iloc[-1], 2), "now": now, "tests": tests, "events": sorted(events, key=lambda e: e["date"]),
+            "weekly": {"dates": [d.strftime("%Y-%m-%d") for d in wk.index], "close": [_r(x, 2) for x in wk]}})
+        print(f"  {name} 지수 {px.index[0]:%Y-%m-%d}~{px.index[-1]:%Y-%m-%d} ({len(px)}일), 신호 {len(events)}건")
+    if not out["markets"]:
+        raise RuntimeError("지수 이력을 하나도 받지 못했습니다")
+    DATA.mkdir(exist_ok=True)
+    (DATA / "market_gauge.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+
+
 # ---------------------------------------------------------------- 텔레그램 알림
 DASHBOARD_URL = "https://hongsup79-creator.github.io/KOSPI-200/"
 
@@ -1518,6 +1643,12 @@ def main():
                 warn(f"{label} 실패: {e}")
     except Exception as e:
         warn(f"config/groups.json 읽기 실패: {e}")
+
+    print("[바닥·고점 지표판]")
+    try:
+        build_gauge(args.demo, updated)
+    except Exception as e:
+        warn(f"바닥·고점 지표판 실패(다른 기능은 정상): {e}")
 
     if ok:
         sector_out["updated"] = updated
