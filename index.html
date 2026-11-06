@@ -178,6 +178,11 @@
   .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .hold-hint { margin: 0 0 10px; }
+  .confirm { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; cursor: pointer; font-size: 14px; }
+  .confirm.on { border: 2px solid var(--green); background: var(--green-bg); }
+  .confirm .cf { display: inline-block; margin: 4px 6px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
+  .confirm .cfn { margin-top: 5px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .confirm.on .cfn { color: var(--text); }
   .gcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   @media (max-width: 700px) { .gcards { grid-template-columns: repeat(2, 1fr); } }
   .gcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
@@ -206,6 +211,7 @@
     <button data-tab="kosdaq150">코스닥150 정배열</button>
     <button data-tab="sector">섹터 흐름</button>
   </nav>
+  <div id="confirm"></div>
   <div id="panel"></div>
 </main>
 
@@ -1085,10 +1091,38 @@ async function renderGauge() {
                 y: { type: 'logarithmic', ticks: { color: css('--muted'), maxTicksLimit: 6, callback: v => Math.round(v).toLocaleString() }, grid: { color: css('--grid') } } } } }));
 }
 
+// ---------------------------------------------------------- ✅ 바닥 확인 신호 배너 (모든 탭 맨 위)
+// '많이 빠졌다'가 아니라 '매도가 끝나고 돌아섰다'를 확인하는 두 신호: VIX 급등 후 꺾임, 체온계 회복
+async function renderConfirm() {
+  const el = document.getElementById('confirm'); if (!el) return;
+  let g; try { g = await getJSON('data/market_gauge.json'); } catch { el.innerHTML = ''; return; }
+  const k = g.markets.find(m => m.id === 'KOSPI') || g.markets[0];
+  const lastEv = (m, id) => { const e = m.events.filter(x => x.id === id).pop(); return e ? e.date : null; };
+  const on = [];
+  g.markets.forEach(m => m.tests.forEach(t => { if ((t.id === 'vix_turn' || t.id === 'br_up') && t.active)
+    on.push({ m: m.name, id: t.id, name: t.name, date: lastEv(m, t.id) }); }));
+  const vixOn = on.some(x => x.id === 'vix_turn');
+  const uniq = on.filter((x, i) => x.id !== 'vix_turn' || on.findIndex(y => y.id === 'vix_turn') === i);
+  const n = k.now;
+  const vixProg = n.vix == null ? '' : n.vix_max10 >= 30
+    ? `VIX 최근 10일 최고 <b>${n.vix_max10}</b> → 지금 <b>${n.vix}</b> (최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%, <b>−20%</b>가 되면 켜짐)`
+    : `VIX 지금 <b>${n.vix}</b> · 최근 10일 최고 ${n.vix_max10} (<b>30</b>을 넘었다가 20% 꺾이면 켜짐)`;
+  const brProg = g.markets.filter(m => m.now.breadth != null).map(m =>
+    `${m.name} 체온계 <b>${m.now.breadth}%</b>${m.now.br_min10 <= 10 ? ` (최근 10일 최저 ${m.now.br_min10}% → <b>20%</b> 회복 시 켜짐)` : ' (10% 이하로 내려갔다가 20% 회복 시 켜짐)'}`).join(' · ');
+  el.innerHTML = uniq.length
+    ? `<div class="confirm on" data-go="gauge"><b>✅ 바닥 확인 신호가 켜졌습니다</b>
+        ${uniq.map(x => `<span class="cf">${x.id === 'vix_turn' ? 'VIX 급등 후 꺾임' : x.m + ' 체온계 회복'}${x.date ? ` (${x.date.slice(5).replace('-', '/')})` : ''}</span>`).join('')}
+        <div class="cfn">‘매도가 끝나고 돌아섰다’는 확인 신호입니다. 그래도 한 번에 사지 말고 나눠서, 손절선을 먼저 정하세요. 과거 성적은 🌡️ 바닥·고점 탭에서 확인하세요.</div></div>`
+    : `<div class="confirm" data-go="gauge"><b>⏳ 바닥 확인 신호 대기 중</b> <span class="tag">(${k.to} 기준)</span>
+        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}</div></div>`;
+  el.querySelector('.confirm').onclick = () => { if (state.tab !== 'gauge') { state.tab = 'gauge'; location.hash = 'gauge'; render(); } };
+}
+
 // ---------------------------------------------------------- 공통
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  renderConfirm();
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();

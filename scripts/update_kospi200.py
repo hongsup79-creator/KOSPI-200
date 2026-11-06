@@ -1469,7 +1469,8 @@ def gauge_signals(px, vix_k, breadth=None):
         sig["br_dn"] = ("고점", "체온계 70% 이상 → 50% 아래로 꺾임", (bmax10 >= 70) & (b < 50))
     now = {"gap": _r(gap.iloc[-1], 1), "dd": _r(dd.iloc[-1], 1), "vix": _r(vix_k.iloc[-1], 1),
            "vix_max10": _r(vmax10.iloc[-1], 1),
-           "breadth": None if breadth is None else _r(breadth.reindex(px.index).iloc[-1], 1)}
+           "breadth": None if breadth is None else _r(breadth.reindex(px.index).iloc[-1], 1),
+           "br_min10": None if breadth is None else _r(breadth.reindex(px.index).rolling(10, min_periods=1).min().iloc[-1], 1)}
     return sig, now
 
 
