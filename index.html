@@ -461,6 +461,23 @@ function fwdTable(meta) {
       </tbody></table></div><div class="note">숫자는 같은 기간 구성종목 평균 대비. ‘N일째’는 아직 기간이 끝나지 않은 지금까지 성적입니다.</div></details>` : ''}`;
 }
 
+function wrTestTable(meta) {
+  const T = meta.wr_test;
+  if (!T) return '';
+  const c = r => r ? `${pctS(r.excess)}<br><span class="tag">${r.beat}% · ${r.n}</span>` : '<span class="tag">-</span>';
+  const rn = meta.regime_now, rk = rn == null ? null : rn <= 20 ? 'cold' : rn >= 50 ? 'hot' : null;
+  const rlab = rk === 'cold' ? '약세장' : rk === 'hot' ? '강세장' : null;
+  const base = T.find(r => r.id === 'WT0');
+  const vs = r => base && base.all && r.all && r.id !== 'WT0' ? ` <span class="${r.all.excess > base.all.excess ? 'ret-up' : 'ret-dn'}">(${r.all.excess > base.all.excess ? '기준보다 ↑' : '기준보다 ↓'})</span>` : '';
+  return `<div class="sub-h">⑥-1 %R 5년 검증 — 20일 뒤 평균 대비 (다음 날 종가 진입)</div>
+    <div class="rt-wrap"><table class="sc rt"><thead><tr><th>조건</th><th class="num">등급</th><th class="num">전체</th><th class="num">앞 기간</th><th class="num">뒤 기간</th>${rlab ? `<th class="num">지금<br>${rlab}</th>` : ''}</tr></thead><tbody>
+    ${T.map(r => `<tr><td style="white-space:normal" title="${esc(r.desc)}">${esc(r.name)}${vs(r)}</td><td class="num"><span class="g ${r.grade}">${r.grade}</span></td>
+      <td class="num">${c(r.all)}</td><td class="num">${c(r.train)}</td><td class="num">${c(r.test)}</td>${rk ? `<td class="num">${c(r[rk])}</td>` : ''}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="note">%R이 −80·−20 기준선을 지나는 날을 지난 5년치 고가·저가로 검증한 결과입니다(기존 규칙·후보·등급과 무관한 관찰용). 첫 줄(정배열 종목 아무 때나)보다 확실히 높아야 그 %R 신호가 쓸모 있다고 볼 수 있습니다.
+      등급 기준은 위 규칙과 같습니다(앞·뒤 기간 모두 비용 0.3%보다 높고 t값 충분). 지금 구성종목으로 과거를 계산해 실제보다 좋게 나올 수 있습니다.</div>`;
+}
+
 function wrTable(meta) {
   const f = meta.forward_wr;
   if (!f) return '';
@@ -523,6 +540,7 @@ function scoreTable(meta) {
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
     <div class="note">같은 달끼리 비교해 경보 종목이 확실히 <b>더 나빴으면 ✅</b>(팔아서 이득), 확실히 <b>더 좋았으면 ⚠️</b>(팔면 손해, 반등)입니다.</div>
     ${fwdTable(meta)}
+    ${wrTestTable(meta)}
     ${wrTable(meta)}
     <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>

@@ -918,15 +918,15 @@ def rule_fires(price, sig, sec_mask, sec_streak, gap20, regime, val=None):
     }
 
 
-def grade_rules(price, fires, short=None, prev=None):
+def grade_rules(price, fires, short=None, prev=None, rules=None, nodedupe=("V0",)):
     T, N = price.shape
     MON = np.repeat(price.index.to_period("M").astype(str).to_numpy()[:, None], N, axis=1)
     early = np.repeat((price.index < SPLIT)[:, None], N, axis=1)
     ret = {lag: fwd_ret(price, 20, lag) for lag in (ENTRY_LAG, 3)}
     exc = {lag: ret[lag].sub(ret[lag].mean(axis=1), axis=0).to_numpy() for lag in ret}
     out = []
-    for rd in RULES:
-        ev = (fires[rd["id"]] if rd["id"] == "V0" else dedupe(fires[rd["id"]])).to_numpy(dtype=bool)   # V0은 매달 1번이라 쿨다운 불필요
+    for rd in (rules or RULES):
+        ev = (fires[rd["id"]] if rd["id"] in nodedupe else dedupe(fires[rd["id"]])).to_numpy(dtype=bool)   # 매달 1번짜리는 쿨다운 불필요
 
         def part(mask, lag=ENTRY_LAG):
             v = np.where(ev & mask, exc[lag], np.nan).ravel()
@@ -1043,6 +1043,30 @@ def forward_log(ix_id, price, cands_today, today, gmap, rfires=None):
 # ---------------------------------------------------------------- 윌리엄스 %R (관찰용 — 기존 신호·규칙에는 쓰지 않음)
 WR_N = 14          # 기간(거래일)
 WR_PULL = -80.0    # 이 이하면 '눌림'(최근 14일 범위의 하단 20%)
+
+
+WR_TESTS = [
+    {"id": "WT0", "name": "중기 정배열 종목 (매월 초, 비교 기준)", "desc": "중기 정배열 종목을 매달 첫 거래일에 산다고 가정 — 아래 줄들이 이보다 나아야 %R이 쓸모 있음"},
+    {"id": "WT1", "name": "정배열 + %R −80 아래로 진입", "desc": "중기 정배열 종목의 %R이 −80 이하로 처음 내려간 날 (바닥권 진입)"},
+    {"id": "WT2", "name": "정배열 + %R −80 위로 복귀 (바닥 탈출)", "desc": "−80 이하였던 %R이 −80 위로 다시 올라온 날"},
+    {"id": "WT3", "name": "정배열 + %R −20 위로 진입 (꼭대기)", "desc": "%R이 −20 이상으로 처음 올라간 날 (최근 2주 꼭대기)"},
+    {"id": "WT4", "name": "정배열 + %R −20 아래로 이탈 (꼭대기 이탈)", "desc": "−20 이상이던 %R이 −20 아래로 내려온 날"},
+]
+
+
+def wr_test_fires(price, wr, mid):
+    """%R 기준선(−80, −20)을 지나는 날을 5년치로 검증하기 위한 사건 (관찰용 — 후보·등급과 무관)"""
+    lo, hi = _b(wr <= WR_PULL), _b(wr >= -20)
+    lo_p, hi_p = lo.shift(1, fill_value=False), hi.shift(1, fill_value=False)
+    valid = wr.notna() & wr.shift(1).notna()
+    mon = pd.Series(price.index.to_period("M"), index=price.index)
+    mfirst = pd.DataFrame(np.repeat((mon != mon.shift(1)).to_numpy()[:, None], price.shape[1], axis=1),
+                          index=price.index, columns=price.columns)
+    return {"WT0": mid & mfirst,
+            "WT1": mid & valid & lo & ~lo_p,
+            "WT2": mid & valid & ~lo & lo_p,
+            "WT3": mid & valid & hi & ~hi_p,
+            "WT4": mid & valid & ~hi & hi_p}
 
 
 def williams_r(price, hl=None, n=WR_N):
@@ -1289,7 +1313,9 @@ def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap, rfires)
     wr_summary = None if demo else forward_wr(ix["id"], price, wr, sec_mask["mid"], info, dates[-1].strftime("%Y-%m-%d"))
-    meta = {"regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "forward_wr": wr_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
+    wr_test = grade_rules(price, wr_test_fires(price, wr, sec_mask["mid"]), mshort,
+                          rules=WR_TESTS, nodedupe=("WT0",))
+    meta = {"wr_test": wr_test, "regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "forward_wr": wr_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
             "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),
             "defs": {"early": EARLY, "exits": EXITS}, "rules": rgrades, "split": SPLIT}
