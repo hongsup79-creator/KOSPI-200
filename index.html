@@ -11,7 +11,7 @@
     --bg: #f4f6f9; --panel: #ffffff; --line: #e2e6ec; --text: #1b1f24;
     --muted: #6b7280; --accent: #2f6fec; --accent-text: #ffffff; --green: #0b8a55; --green-bg: #e2f5ea;
     --red: #d6363b; --notice-bg: #fff4d6; --notice-text: #8a5a00; --group-bg: #f1f4f9;
-    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec;
+    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec; --wr: #6250d6;
     --grid: rgba(0,0,0,0.07); --tip-bg: #ffffff;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -19,7 +19,7 @@
     --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e8eaed;
     --muted: #8b919c; --accent: #4f8cff; --green: #3ecf8e; --green-bg: #1e3a2c;
     --red: #ff7a7a; --notice-bg: #3a2d12; --notice-text: #f5c66b; --group-bg: #15181d;
-    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff;
+    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff; --wr: #9085e9;
     --grid: rgba(255,255,255,0.06); --tip-bg: #0b0c0f;
   }
   * { box-sizing: border-box; }
@@ -161,7 +161,12 @@
   .fwd-list td { font-size: 12px; padding: 6px 3px; }
   @media (max-width: 520px) { .views { grid-template-columns: repeat(3, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
   .badge.val { background: var(--tab-on); color: var(--accent); }
-  .badge.wr { background: var(--tab-on); color: var(--muted); }
+  .badge.wr { background: var(--wr); color: #fff; font-weight: 700; }
+  .wrc { display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end; }
+  .wrbar { width: 34px; height: 7px; border-radius: 4px; background: var(--grid); position: relative; overflow: hidden; }
+  .wrbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--muted); border-radius: 4px; }
+  .wrc.on { color: var(--wr); font-weight: 700; } .wrc.on .wrbar i { background: var(--wr); }
+  .sb.wr { color: #fff; background: var(--wr); }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
@@ -229,13 +234,17 @@ const panel = () => document.getElementById('panel');
 const OVERHEAT = 15;   // 20일선 대비 +15% 이상이면 과열 배지
 const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo';
 const WR_PULL = -80;   // 윌리엄스 %R 이 이하면 '눌림' 배지 (관찰용)
-const wrBadge = it => it.wr != null && it.wr <= WR_PULL ? `<span class="badge wr" title="윌리엄스 %R(14일) ${it.wr} — 최근 14일 범위의 하단 20% (관찰용, 규칙 아님)">%R 눌림 ${it.wr}</span>` : '';
+const wrBadge = it => it.wr != null && it.wr <= WR_PULL ? `<span class="badge wr" title="윌리엄스 %R(14일) ${it.wr} — 최근 14일 범위의 하단 20% (관찰용, 규칙 아님)">◆ %R 눌림 ${it.wr}</span>` : '';
+const wrCell = it => it.wr == null ? '<td class="num tag">-</td>' :
+  `<td class="num"><span class="wrc ${it.wr <= WR_PULL ? 'on' : ''}" title="윌리엄스 %R(14일): 0=최근 14일 꼭대기, −100=바닥. −80 이하면 눌림(관찰용)"><span class="wrbar"><i style="width:${Math.max(4, 100 + it.wr)}%"></i></span>${it.wr}</span></td>`;
+let curWr = {};
 function row(it) {
   const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
     <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}${wrBadge(it)}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
+    ${wrCell(it)}
     <td class="num"><span class="score ${scoreCls(it.score)}" title="이격도 ${it.gap ?? '-'}% · 거래량 ${it.volr ?? '-'}배 · %R ${it.wr ?? '-'}">${it.score ?? '-'}</span></td>
     <td class="num">${fmtCap(it.cap)}</td></tr>`;
 }
@@ -264,7 +273,7 @@ function renderSection(s, idx) {
       <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
       <span class="count">${q ? items.length + ' / ' : ''}${s.items.length}종목</span></div>
     ${chips.length ? `<div class="changes">${chips.join('')}</div>` : '<div style="height:12px"></div>'}
-    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num">추세강도</th><th class="num">시가총액</th></tr></thead>
+    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num" title="윌리엄스 %R(14일) — 막대가 짧을수록 최근 2주 바닥권">%R</th><th class="num">추세강도</th><th class="num">시가총액</th></tr></thead>
       <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
   </section>`;
 }
@@ -311,12 +320,13 @@ function drawThermo(meta) {
 const pctS = v => v == null ? '<span class="tag">-</span>' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
 const matchQ = it => { const q = state.q.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q) || (it.sector || '').toLowerCase().includes(q) || it.code.includes(q); };
 let curSig = {};
-const sigBadge = code => { const v = curSig[code]; if (!v) return '';
+const sigBadge = code => { const v = curSig[code] || {};
   let b = '';
   if (v.u) b += v.g === 'C' ? '<span class="sb off" title="그날 켜진 규칙(등급 미달)">△</span>' : `<span class="sb up" title="그날 상승 초입 규칙 (${v.g}등급)">▲${v.g}</span>`;
   if (v.d) b += v.d === 'pull' ? '<span class="sb pull" title="그날 눌림 (60일선 상승 중)">▽눌림</span>' : '<span class="sb dn" title="그날 하락 경고 (60일선 꺾임)">▼경고</span>';
   return b; };
-const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}`;
+const wrSb = code => curWr[code] != null && curWr[code] <= -80 ? `<span class="sb wr" title="윌리엄스 %R(14일) ${curWr[code]} — 최근 2주 범위의 바닥권 (관찰용)">◆%R</span>` : '';
+const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${wrSb(it.code)}`;
 const alignTag = it => it.aligned && it.aligned.length
   ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
 
@@ -337,6 +347,11 @@ function renderToday(data, meta) {
     <div class="sub-h"><span class="tri-up">▲ 상승 초입</span> — 검증 통과(A·B) 규칙 · ${up.length}</div>${table(up, true)}
     <div class="sub-h"><span class="tri-pull">▽ 눌림</span> — 정배열 종목이 꺾였지만 60일선은 상승 중 · ${pull.length}</div>${table(pull, false)}
     <div class="sub-h"><span class="tri-dn">▼ 하락 경고</span> — 정배열 종목이 꺾였고 60일선도 꺾임 · ${dn.length}</div>${table(dn, false)}
+    ${(() => { const f = meta.forward_wr; if (!f) return '';
+      const ev = (f.items || []).filter(x => x.date === data.date && matchQ(x));
+      return `<div class="sub-h"><span style="color:var(--wr)">◆ %R 눌림 진입</span> — 중기 정배열 종목이 최근 2주 바닥권(−80 이하)에 처음 들어옴 · ${ev.length} <span class="tag">관찰용·미검증</span></div>
+        ${ev.length ? `<table><thead><tr><th>종목</th><th class="num">%R</th></tr></thead><tbody>${ev.map(x => `<tr><td>${nameCell(x)}</td><td class="num"><span class="wrc on">${x.wr}</span></td></tr>`).join('')}</tbody></table>`
+                    : `<div class="empty" style="padding:10px 0">${data.date < f.since ? '관찰 기록 시작(' + f.since.slice(5) + ') 이전 날짜' : '없음'}</div>`}`; })()}
     ${weak.length ? `<details class="defs"><summary>△ 등급 미달 규칙이 켜진 종목 ${weak.length}개 보기 ▾</summary>${table(weak, true)}</details>` : ''}
     <div class="note" style="margin-top:10px">▽·▼는 자동 매도 신호가 아닙니다(성적표 ② 참고). 지금 시장 국면에 따라 규칙 성적이 달라지니 성적표 ⓪의 ‘지금 약세장/강세장’ 칸도 함께 보세요.</div>
   </section>`;
@@ -522,6 +537,7 @@ async function renderAlignment(ixId) {
   const date = state.date[ixId] || meta.dates[0];
   const data = await getJSON(ix.dir + date + '.json');
   curSig = data.sig || {};
+  curWr = {}; (data.sections || []).forEach(sec => sec.items.forEach(it => { if (it.wr != null) curWr[it.code] = it.wr; }));
   if (state.tab !== ixId) return;
 
   const notices = [];
@@ -768,7 +784,7 @@ async function openChart(ixId, code) {
   const box = document.createElement('div');
   box.className = 'modal';
   box.innerHTML = `<div class="box" role="dialog" aria-label="${esc(st.n)} 차트">
-    <div class="top"><h2>${esc(st.n)}</h2><span class="tag">${code} · ${fmtP(lastClose)}원${st.v ? ` · PER ${st.v[0] ?? '-'} · PBR ${st.v[1] ?? '-'} · ROE ${st.v[2] ?? '-'}%` : ''}</span>${st.v && st.v[3] ? '<span class="badge val">저평가</span>' : ''}${st.v && st.v[0] != null && st.v[0] < 4 ? '<span class="badge hot" title="PER이 아주 낮으면 자산 매각 등 일회성 이익일 수 있습니다">일회성 이익?</span>' : ''}
+    <div class="top"><h2>${esc(st.n)}</h2>${curWr[code] != null ? `<span class="badge ${curWr[code] <= -80 ? 'wr' : ''}" title="윌리엄스 %R(14일)">%R ${curWr[code]}</span>` : ''}<span class="tag">${code} · ${fmtP(lastClose)}원${st.v ? ` · PER ${st.v[0] ?? '-'} · PBR ${st.v[1] ?? '-'} · ROE ${st.v[2] ?? '-'}%` : ''}</span>${st.v && st.v[3] ? '<span class="badge val">저평가</span>' : ''}${st.v && st.v[0] != null && st.v[0] < 4 ? '<span class="badge hot" title="PER이 아주 낮으면 자산 매각 등 일회성 이익일 수 있습니다">일회성 이익?</span>' : ''}
       <button class="x" type="button">닫기</button></div>
     <div class="legend" style="margin-top:8px">
       <span><span class="tri-up">▲</span> 상승 초입 (A·B등급 규칙)</span><span><span class="tri-off">△</span> 등급 미달 규칙</span>
