@@ -11,7 +11,7 @@
     --bg: #f4f6f9; --panel: #ffffff; --line: #e2e6ec; --text: #1b1f24;
     --muted: #6b7280; --accent: #2f6fec; --accent-text: #ffffff; --green: #0b8a55; --green-bg: #e2f5ea;
     --red: #d6363b; --notice-bg: #fff4d6; --notice-text: #8a5a00; --group-bg: #f1f4f9;
-    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec; --wr: #6250d6;
+    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec; --wr: #6250d6; --bot: #0b8a55; --top: #c26a00;
     --grid: rgba(0,0,0,0.07); --tip-bg: #ffffff;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -19,7 +19,7 @@
     --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e8eaed;
     --muted: #8b919c; --accent: #4f8cff; --green: #3ecf8e; --green-bg: #1e3a2c;
     --red: #ff7a7a; --notice-bg: #3a2d12; --notice-text: #f5c66b; --group-bg: #15181d;
-    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff; --wr: #9085e9;
+    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff; --wr: #9085e9; --bot: #3ecf8e; --top: #f0a020;
     --grid: rgba(255,255,255,0.06); --tip-bg: #0b0c0f;
   }
   * { box-sizing: border-box; }
@@ -183,6 +183,18 @@
   .confirm .cf { display: inline-block; margin: 4px 6px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
   .confirm .cfn { margin-top: 5px; font-size: 13px; color: var(--muted); line-height: 1.55; }
   .confirm.on .cfn { color: var(--text); }
+  .gsec { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+  .gsec.bot { border-left-color: var(--grid); } .gsec.bot2 { border-left-color: var(--bot); } .gsec.top { border-left-color: var(--top); }
+  .gsec .gh { font-weight: 800; font-size: 15px; margin-bottom: 4px; }
+  .gstep { display: flex; gap: 8px; padding: 6px 2px; border-top: 1px dashed var(--line); }
+  .gstep:first-of-type { border-top: 0; }
+  .gck { font-size: 16px; color: var(--muted); line-height: 1.3; } .gstep.on .gck { color: var(--bot); }
+  .gsec.top .gstep.on .gck { color: var(--top); }
+  .gtl { font-weight: 600; font-size: 14px; } .gnow { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .gstep.on .gtl { font-weight: 800; }
+  .jd { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
+  .jd.ok { background: var(--green-bg); color: var(--green); } .jd.no { background: var(--grid); color: var(--muted); } .jd.few { background: var(--grid); color: var(--muted); }
+  .gok { color: var(--bot); }
   .gcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   @media (max-width: 700px) { .gcards { grid-template-columns: repeat(2, 1fr); } }
   .gcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
@@ -1009,6 +1021,14 @@ document.addEventListener('click', e => {
 });
 
 // ---------------------------------------------------------- 🌡️ 바닥·고점 지표판
+// 과거 성적 판정 (60일 뒤 기준): 바닥 신호는 평소보다 확실히 높고 상승 확률도 높아야, 고점 신호는 확실히 낮아야 쓸모 있음
+function gaugeJudge(t) {
+  const r = t && t.h['60'];
+  if (!r || !r.n || r.n < 5) return ['few', '⚠ 사례 적음 — 믿지 마세요'];
+  const d = r.avg - r.base;
+  if (t.kind === '바닥') return d > 1 && r.win >= r.base_win ? ['ok', '✅ 과거에 맞았음'] : ['no', '❌ 평소와 차이 없음'];
+  return d < -1 ? ['ok', '✅ 과거에 맞았음'] : d > 1 ? ['no', '❌ 오히려 더 올랐음'] : ['no', '❌ 평소와 차이 없음'];
+}
 async function renderGauge() {
   let g;
   try { g = await getJSON('data/market_gauge.json'); }
@@ -1016,60 +1036,69 @@ async function renderGauge() {
   if (state.tab !== 'gauge') return;
   state.gm = state.gm && g.markets.some(m => m.id === state.gm) ? state.gm : g.markets[0].id;
   const m = g.markets.find(x => x.id === state.gm);
-  const n = m.now;
-  const zone = (z, txt) => `<span class="gz ${z}">${txt}</span>`;
-  const act = id => (m.tests.find(t => t.id === id) || {}).active;
-  const cards = [
-    ['지수 위치', n.gap == null ? '-' : (n.gap > 0 ? '+' : '') + n.gap + '%', '120일선 대비',
-      n.gap == null ? '' : n.gap <= -10 ? zone('lo', '바닥권') : n.gap >= 15 ? zone('hi', '고점권(과열)') : zone('mid', '중립')],
-    ['고점 대비', n.dd == null ? '-' : n.dd + '%', '최근 1년 최고가 대비',
-      n.dd == null ? '' : n.dd <= -20 ? zone('lo', '바닥권(약세장)') : n.dd >= -5 ? zone('mid', '고점 근처') : zone('mid', '조정 중')],
-    ['VIX 공포지수', n.vix ?? '-', `최근 10일 최고 ${n.vix_max10 ?? '-'}`,
-      n.vix == null ? '' : act('vix_turn') ? zone('lo', '공포 정점 통과') : n.vix >= 30 ? zone('lo', '공포 (아직 진행 중)') : n.vix < 13 ? zone('hi', '방심') : zone('mid', '중립')],
-    ['체온계', n.breadth == null ? '-' : n.breadth + '%', '단기 정배열 종목 비율',
-      n.breadth == null ? '' : act('br_up') ? zone('lo', '바닥에서 회복') : n.breadth <= 10 ? zone('lo', '바닥권') : n.breadth >= 70 ? zone('hi', '고점권') : zone('mid', '중립')],
-  ];
-  const lo = m.tests.filter(t => t.kind === '바닥' && t.active).length, hi = m.tests.filter(t => t.kind === '고점' && t.active).length;
-  const verdict = lo && !hi ? `<b class="ret-dn">바닥 쪽 신호 ${lo}개</b>가 최근 5일 안에 켜져 있습니다.` : hi && !lo ? `<b class="ret-up">고점 쪽 신호 ${hi}개</b>가 최근 5일 안에 켜져 있습니다.` : lo && hi ? `바닥 쪽 ${lo}개, 고점 쪽 ${hi}개 신호가 엇갈립니다.` : '지금은 바닥·고점 신호가 모두 꺼져 있습니다 (중립).';
+  const n = m.now, T = Object.fromEntries(m.tests.map(t => [t.id, t]));
+  // 과거 성적 판정 (60일 뒤 기준): 바닥 신호는 평소보다 확실히 높아야, 고점 신호는 확실히 낮아야 쓸모 있음
+  const judge = gaugeJudge;
+  const J = t => { const [c, txt] = judge(t); return `<span class="jd ${c}">${txt}</span>`; };
+  const fmt = v => v == null ? '-' : (v > 0 ? '+' : '') + v + '%';
+  const row = (on, title, now, need, t) => `<div class="gstep ${on ? 'on' : ''}"><div class="gck">${on ? '●' : '○'}</div>
+    <div><div class="gtl">${title} ${J(t)}</div><div class="gnow">지금: <b>${now}</b> · <span class="tag">${need}</span></div></div></div>`;
+  const s1 = [row(n.gap != null && n.gap <= -10, '지수가 120일선보다 10% 이상 아래', fmt(n.gap), '−10% 이하면 충족', T.gap_lo),
+              row(n.dd != null && n.dd <= -20, '1년 최고가보다 20% 이상 하락', fmt(n.dd), '−20% 이하면 충족', T.dd20)];
+  const vixNow = n.vix_max10 >= 30 ? `${n.vix} (10일 최고 ${n.vix_max10}, 최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%)` : `${n.vix ?? '-'} (10일 최고 ${n.vix_max10 ?? '-'})`;
+  const s2 = [row(T.vix_turn && T.vix_turn.active, 'VIX 공포지수가 30 넘게 치솟았다가 20% 이상 꺾임', vixNow, '30 돌파 → 최고점 대비 −20%', T.vix_turn),
+              T.br_up ? row(T.br_up.active, '체온계가 10% 이하에서 20%까지 회복', `${n.breadth}% (10일 최저 ${n.br_min10}%)`, '10% 이하 → 20% 이상', T.br_up) : ''];
+  const tops = [['gap_hi', n.gap != null && n.gap >= 15, '지수가 120일선보다 15% 이상 위 (과열)', fmt(n.gap), '+15% 이상이면 경고'],
+                ['vix_calm', n.vix != null && n.vix < 13, 'VIX 13 아래 (모두가 방심)', String(n.vix ?? '-'), '13 미만이면 경고'],
+                ['br_dn', T.br_dn && T.br_dn.active, '체온계 70% 이상에서 50% 아래로 꺾임', `${n.breadth ?? '-'}%`, '70% → 50% 아래']]
+    .filter(([id]) => T[id]);
+  const topOk = tops.filter(([id]) => judge(T[id])[0] === 'ok');
+  const n1 = s1.filter(x => x.includes('gstep on')).length, n2 = s2.filter(x => x.includes('gstep on')).length;
+  const summary = n2 ? `<b class="gok">② 바닥 확인 신호가 켜졌습니다.</b> 매도가 끝나고 돌아섰다는 신호입니다. 그래도 나눠서 사고, 손절선을 먼저 정하세요.`
+    : n1 ? `<b>① 많이 빠진 상태(바닥권)이지만, ② 돌아섰다는 확인은 아직 없습니다.</b> 이 단계에서는 더 빠지는 경우가 많습니다(올해 6~7월에도 ①이 켜진 뒤 추가 하락). ②가 켜질 때까지 기다리는 쪽이 안전합니다.`
+    : `바닥권도, 바닥 확인도 아닙니다. 평소 구간입니다.`;
+  const useful = new Set(m.tests.filter(t => judge(t)[0] === 'ok').map(t => t.id));
   const cell = (r, wide) => r && r.n ? `<td class="num${wide ? '' : ' y1'}">${r.avg > 0 ? '+' : ''}${r.avg}%<br><span class="tag">상승 ${r.win}% · ${r.n}번</span></td>` : `<td class="num tag${wide ? '' : ' y1'}">사례 없음</td>`;
   const base = m.tests[0].h;
-  const vs = t => { const r = t.h['60']; if (!r || !r.n || r.n < 3) return '<span class="tag">사례 적음</span>';
-    const d = r.avg - r.base; return t.kind === '바닥' ? (d > 1 ? '<span class="ret-up">평소보다 ↑</span>' : '<span class="tag">평소와 비슷/↓</span>')
-      : (d < -1 ? '<span class="ret-dn">평소보다 ↓ (경고 유효)</span>' : '<span class="tag">평소와 비슷/↑</span>'); };
   const NAMES = Object.fromEntries(m.tests.map(t => [t.id, t.name]));
   const evs = m.events.slice().reverse();
   panel().innerHTML = `
     ${g.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
     <div class="controls">
       <div class="seg" id="gm">${g.markets.map(x => `<button data-k="${x.id}" class="${x.id === m.id ? 'on' : ''}">${x.name}</button>`).join('')}</div>
-      <div class="note">${m.name} 지수 ${m.to} 종가 <b>${m.last.toLocaleString()}</b> · 검증 기간 ${m.from.slice(0, 4)}~${m.to.slice(0, 4)}년 (체온계는 최근 5년)</div>
+      <div class="note">${m.name} 지수 ${m.to} 종가 <b>${m.last.toLocaleString()}</b> · 검증 기간 ${m.from.slice(0, 4)}~${m.to.slice(0, 4)}년 (체온계는 최근 5년) · VIX는 한국 날짜 기준 <b>전날 밤 미국 종가</b></div>
     </div>
     <section>
       <div class="sec-head"><h2>🌡️ 지금 ${m.name}은 어디쯤?</h2></div>
-      <div class="gcards">${cards.map(([t, v, sub, z]) => `<div class="gcard"><div class="gt">${t}</div><div class="gv">${v}</div><div class="tag">${sub}</div>${z}</div>`).join('')}</div>
-      <div class="note" style="margin-top:10px">${verdict} 아래 표에서 각 신호가 과거에 실제로 맞았는지 확인하세요.</div>
+      <div class="note" style="margin:4px 0 10px">${summary}</div>
+      <div class="gsec bot"><div class="gh">① 많이 빠졌나? <span class="tag">바닥권 = 싸진 상태. 아직 바닥은 아닐 수 있음</span></div>${s1.join('')}</div>
+      <div class="gsec bot2"><div class="gh">② 매도가 끝나고 돌아섰나? <span class="tag">바닥 확인 = 실제로 움직일 신호</span></div>${s2.join('')}</div>
+      <div class="gsec top"><div class="gh">③ 너무 올랐나? <span class="tag">고점 경고</span></div>
+        ${topOk.length ? topOk.map(([id, on, title, now, need]) => row(on, title, now, need, T[id])).join('') : `<div class="gnow" style="padding:6px 2px">이 시장에서는 과거에 맞았던 고점 신호가 없었습니다.</div>`}
+        ${tops.length > topOk.length ? `<div class="tag" style="margin-top:4px;font-size:12px;display:block">맞지 않았던 고점 신호(${tops.filter(x => !topOk.includes(x)).map(x => x[2].split(' (')[0]).join(', ')})는 표시하지 않았습니다 — 아래 검증표 참고</div>` : ''}
+      </div>
+      <div class="note" style="margin-top:8px">● = 지금 해당 · ○ = 해당 안 됨. 옆의 ✅/❌는 그 신호가 과거 ${m.from.slice(0, 4)}년 이후 실제로 맞았는지입니다(신호 다음 날 지수를 샀다면 60일 뒤 성적을 평소와 비교).</div>
     </section>
     <section>
       <div class="sec-head"><h2>📈 ${m.name} 지수와 과거 신호</h2><span class="count">주간 종가 · 로그 눈금</span></div>
-      <div class="legend"><span><span class="ret-up">▲</span> 바닥 신호</span><span><span class="ret-dn">▼</span> 고점 신호</span></div>
+      <div class="legend"><span><span style="color:var(--bot)">▲</span> 바닥 신호</span><span><span style="color:var(--top)">▼</span> 고점 신호</span><span class="tag">과거에 맞았던(✅) 신호만 표시</span></div>
       <div style="position:relative;height:300px"><canvas id="gch"></canvas></div>
     </section>
     <section>
       <div class="sec-head"><h2>✅ 신호 검증 — 신호 다음 날 지수를 샀다면</h2></div>
       <div class="rt-wrap"><table class="sc rt"><thead><tr><th>신호</th><th class="num y1">20일 뒤</th><th class="num">60일 뒤</th><th class="num">120일 뒤</th></tr></thead><tbody>
-        <tr class="base"><td><b>평소 (아무 날이나)</b></td><td class="num y1">${base['20'].base > 0 ? '+' : ''}${base['20'].base}%<br><span class="tag">상승 ${base['20'].base_win}%</span></td>
-          <td class="num">${base['60'].base > 0 ? '+' : ''}${base['60'].base}%<br><span class="tag">상승 ${base['60'].base_win}%</span></td>
-          <td class="num">${base['120'].base > 0 ? '+' : ''}${base['120'].base}%<br><span class="tag">상승 ${base['120'].base_win}%</span></td></tr>
-        ${m.tests.map(t => `<tr><td style="white-space:normal"><span class="${t.kind === '바닥' ? 'ret-up' : 'ret-dn'}">${t.kind === '바닥' ? '▲' : '▼'}</span> ${esc(t.name)}${t.active ? ' <span class="badge hot">지금 켜짐</span>' : ''}<br>${vs(t)}${t.from > m.from ? ` <span class="tag">· ${t.from.slice(0, 4)}년부터</span>` : ''}</td>
+        <tr class="base"><td><b>평소 (아무 날이나)</b></td><td class="num y1">${fmt(base['20'].base)}<br><span class="tag">상승 ${base['20'].base_win}%</span></td>
+          <td class="num">${fmt(base['60'].base)}<br><span class="tag">상승 ${base['60'].base_win}%</span></td>
+          <td class="num">${fmt(base['120'].base)}<br><span class="tag">상승 ${base['120'].base_win}%</span></td></tr>
+        ${m.tests.map(t => `<tr><td style="white-space:normal"><span style="color:var(${t.kind === '바닥' ? '--bot' : '--top'})">${t.kind === '바닥' ? '▲ 바닥' : '▼ 고점'}</span> ${esc(t.name)}<br>${J(t)}${t.from > m.from ? ` <span class="tag">· ${t.from.slice(0, 4)}년부터</span>` : ''}</td>
           ${cell(t.h['20'])}${cell(t.h['60'], 1)}${cell(t.h['120'], 1)}</tr>`).join('')}
       </tbody></table></div>
-      <div class="note">같은 신호는 ${g.cool}거래일(약 3개월)에 한 번만 셉니다. 신호가 뜬 <b>다음 날 종가</b>에 지수를 샀다고 가정했습니다.
-        바닥 신호는 평소보다 <b>높아야</b>, 고점 신호는 평소보다 <b>낮아야</b> 쓸모가 있습니다. 20년이어도 신호는 몇 번~십여 번뿐이라 <b>참고 자료</b>입니다. 특히 ‘사례 적음’은 믿지 마세요.</div>
+      <div class="note">같은 신호는 ${g.cool}거래일(약 3개월)에 한 번만 셉니다. 바닥 신호는 평소보다 <b>높고 상승 확률도 높아야</b>, 고점 신호는 평소보다 <b>낮아야</b> ✅입니다. 10여 년이어도 신호는 몇 번~십여 번뿐이라 <b>참고 자료</b>입니다.</div>
     </section>
     <section><details>
       <summary><div class="sec-head"><h2>📅 과거 신호 날짜</h2><span class="count">${evs.length}건 · 펼치기</span></div></summary>
       <div class="rt-wrap"><table class="sc"><thead><tr><th>날짜 · 신호</th><th class="num">60일 뒤</th><th class="num">120일 뒤</th></tr></thead><tbody>
-        ${evs.map(e => `<tr><td>${e.date} <span class="${e.kind === '바닥' ? 'ret-up' : 'ret-dn'}">${e.kind === '바닥' ? '▲' : '▼'}</span><br><span class="tag">${esc(NAMES[e.id] || e.id)}</span></td>
+        ${evs.map(e => `<tr><td>${e.date} <span style="color:var(${e.kind === '바닥' ? '--bot' : '--top'})">${e.kind === '바닥' ? '▲' : '▼'}</span>${useful.has(e.id) ? '' : ' <span class="tag">(맞지 않던 신호)</span>'}<br><span class="tag">${esc(NAMES[e.id] || e.id)}</span></td>
           <td class="num">${e.r60 == null ? '<span class="tag">진행 중</span>' : pctS(e.r60)}</td><td class="num">${e.r120 == null ? '<span class="tag">진행 중</span>' : pctS(e.r120)}</td></tr>`).join('')}
       </tbody></table></div></details></section>`;
   document.getElementById('gm').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.gm = b.dataset.k; render(); };
@@ -1077,13 +1106,13 @@ async function renderGauge() {
   const W = m.weekly, wd = W.dates;
   const wi = d => { let lo = 0, hi = wd.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (wd[mid] < d) lo = mid + 1; else hi = mid; } return lo; };
   const up = new Array(wd.length).fill(null), dn = new Array(wd.length).fill(null), lab = {};
-  m.events.forEach(e => { const i = wi(e.date); (lab[i] = lab[i] || []).push(NAMES[e.id]);
-    if (e.kind === '바닥') up[i] = W.close[i] * 0.93; else dn[i] = W.close[i] * 1.07; });
+  m.events.filter(e => useful.has(e.id)).forEach(e => { const i = wi(e.date); (lab[i] = lab[i] || []).push(NAMES[e.id]);
+    if (e.kind === '바닥') up[i] = W.close[i] * 0.92; else dn[i] = W.close[i] * 1.08; });
   charts.push(new Chart(document.getElementById('gch'), { type: 'line',
     data: { labels: wd, datasets: [
       { label: m.name, data: W.close, borderColor: css('--text'), borderWidth: 1.4, pointRadius: 0, tension: 0.1 },
-      { label: '바닥 신호', data: up, showLine: false, pointStyle: 'triangle', pointRadius: 6, backgroundColor: css('--up'), borderColor: css('--up') },
-      { label: '고점 신호', data: dn, showLine: false, pointStyle: 'triangle', rotation: 180, pointRadius: 6, backgroundColor: css('--dn'), borderColor: css('--dn') }] },
+      { label: '바닥 신호', data: up, showLine: false, pointStyle: 'triangle', pointRadius: 6, backgroundColor: css('--bot'), borderColor: css('--bot') },
+      { label: '고점 신호', data: dn, showLine: false, pointStyle: 'triangle', rotation: 180, pointRadius: 6, backgroundColor: css('--top'), borderColor: css('--top') }] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { filter: it => it.raw != null, backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'), borderColor: css('--line'), borderWidth: 1,
         callbacks: { label: it => it.datasetIndex === 0 ? ` ${m.name} ${Math.round(it.raw).toLocaleString()}` : ` ${(lab[it.dataIndex] || []).join(', ')}` } } },
@@ -1099,7 +1128,7 @@ async function renderConfirm() {
   const k = g.markets.find(m => m.id === 'KOSPI') || g.markets[0];
   const lastEv = (m, id) => { const e = m.events.filter(x => x.id === id).pop(); return e ? e.date : null; };
   const on = [];
-  g.markets.forEach(m => m.tests.forEach(t => { if ((t.id === 'vix_turn' || t.id === 'br_up') && t.active)
+  g.markets.forEach(m => m.tests.forEach(t => { if ((t.id === 'vix_turn' || t.id === 'br_up') && t.active && gaugeJudge(t)[0] === 'ok')
     on.push({ m: m.name, id: t.id, name: t.name, date: lastEv(m, t.id) }); }));
   const vixOn = on.some(x => x.id === 'vix_turn');
   const uniq = on.filter((x, i) => x.id !== 'vix_turn' || on.findIndex(y => y.id === 'vix_turn') === i);
@@ -1107,14 +1136,14 @@ async function renderConfirm() {
   const vixProg = n.vix == null ? '' : n.vix_max10 >= 30
     ? `VIX 최근 10일 최고 <b>${n.vix_max10}</b> → 지금 <b>${n.vix}</b> (최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%, <b>−20%</b>가 되면 켜짐)`
     : `VIX 지금 <b>${n.vix}</b> · 최근 10일 최고 ${n.vix_max10} (<b>30</b>을 넘었다가 20% 꺾이면 켜짐)`;
-  const brProg = g.markets.filter(m => m.now.breadth != null).map(m =>
+  const brProg = g.markets.filter(m => m.now.breadth != null && gaugeJudge(m.tests.find(t => t.id === 'br_up'))[0] === 'ok').map(m =>
     `${m.name} 체온계 <b>${m.now.breadth}%</b>${m.now.br_min10 <= 10 ? ` (최근 10일 최저 ${m.now.br_min10}% → <b>20%</b> 회복 시 켜짐)` : ' (10% 이하로 내려갔다가 20% 회복 시 켜짐)'}`).join(' · ');
   el.innerHTML = uniq.length
     ? `<div class="confirm on" data-go="gauge"><b>✅ 바닥 확인 신호가 켜졌습니다</b>
         ${uniq.map(x => `<span class="cf">${x.id === 'vix_turn' ? 'VIX 급등 후 꺾임' : x.m + ' 체온계 회복'}${x.date ? ` (${x.date.slice(5).replace('-', '/')})` : ''}</span>`).join('')}
         <div class="cfn">‘매도가 끝나고 돌아섰다’는 확인 신호입니다. 그래도 한 번에 사지 말고 나눠서, 손절선을 먼저 정하세요. 과거 성적은 🌡️ 바닥·고점 탭에서 확인하세요.</div></div>`
     : `<div class="confirm" data-go="gauge"><b>⏳ 바닥 확인 신호 대기 중</b> <span class="tag">(${k.to} 기준)</span>
-        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}</div></div>`;
+        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}${brProg ? '' : '<br><span class="tag">체온계 회복은 과거 검증에서 맞지 않아 확인 신호에서 뺐습니다</span>'}</div></div>`;
   el.querySelector('.confirm').onclick = () => { if (state.tab !== 'gauge') { state.tab = 'gauge'; location.hash = 'gauge'; render(); } };
 }
 
