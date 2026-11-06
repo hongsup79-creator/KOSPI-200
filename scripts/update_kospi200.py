@@ -1385,6 +1385,9 @@ def build_trend(market, groups, demo, updated):
     else:
         # 미국: 야후 파이낸스 (참고 대시보드와 같은 출처)
         close = _yf_close([ticker(c) for c in codes])
+        # 환율(KRW=X)처럼 아시아 시간에도 거래되는 것 때문에 미국 장이 안 열린 날짜가 생기면
+        # 다른 종목이 전날 값으로 채워져 '1일 변동 0%'가 되므로, 절반 이상 값이 있는 날만 남김
+        close = close[close.notna().mean(axis=1) >= 0.5]
     close = close.tail(TREND_DAYS)
 
     out_groups = []
