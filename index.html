@@ -173,6 +173,7 @@
   .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .hold-hint { margin: 0 0 10px; }
+  .sc td:first-child { min-width: 108px; }
   .notice a { color: inherit; font-weight: 700; }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
@@ -342,6 +343,7 @@ const sigBadge = code => { const v = curSig[code] || {};
   if (v.d) b += v.d === 'pull' ? '<span class="sb pull" title="그날 눌림 (60일선 상승 중)">▽눌림</span>' : '<span class="sb dn" title="그날 하락 경고 (60일선 꺾임)">▼경고</span>';
   return b; };
 const wrSb = code => curWr[code] != null && curWr[code] <= -80 ? `<span class="sb wr" title="윌리엄스 %R(14일) ${curWr[code]} — 최근 2주 범위의 바닥권 (관찰용)${wrWarn ? ' · ' + wrWarn : ''}">◆%R${wrWarn ? ' ⚠' : ''}</span>` : '';
+const hotTag = it => it.gap != null && it.gap >= OVERHEAT ? `<span class="badge hot" title="20일선 대비 +${it.gap}% — 이미 많이 올라 되밀림 위험이 큼">과열 +${Math.round(it.gap)}%</span>` : '';
 const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}`;
 const alignTag = it => it.aligned && it.aligned.length
   ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
@@ -377,7 +379,7 @@ function renderToday(data, meta) {
   const chips = x => (x.u || []).map(r => rules[r] ? `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>` : '').join('');
   const gapS = g => g == null ? '-' : (g > 0 ? '+' : '') + g + '%';
   const table = (arr, withRules) => arr.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">20일선 대비</th><th class="num sector-col">시가총액</th></tr></thead><tbody>
-    ${arr.map(x => `<tr><td>${nameCell(x)} ${alignTag(x)}${withRules && x.g !== 'C' ? regimeTag(x.u) : ''}${withRules ? '<br>' + chips(x) : ''}</td><td class="sector sector-col">${esc(x.sector)}</td>
+    ${arr.map(x => `<tr><td>${nameCell(x)}${x.u ? hotTag(x) : ''} ${alignTag(x)}${withRules && x.g !== 'C' ? regimeTag(x.u) : ''}${withRules ? '<br>' + chips(x) : ''}</td><td class="sector sector-col">${esc(x.sector)}</td>
       <td class="num">${gapS(x.gap)}</td><td class="num sector-col">${fmtCap(x.cap)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:10px 0">없음</div>';
   return `<section>
     <div class="sec-head"><h2>🔔 ${data.date} 장 마감 기준 신호</h2><span class="count">${all.length}종목</span></div>
@@ -404,7 +406,7 @@ function renderCands(data, meta) {
       <label class="toggle"><input type="checkbox" id="gA" ${state.gA ? 'checked' : ''}> A등급만</label></div>
     ${passed.length ? '' : '<div class="empty">지금 데이터로는 통과한 규칙이 없습니다.</div>'}
     ${items.length ? `<table><thead><tr><th>종목 · 켜진 규칙</th><th class="sector-col">섹터</th><th class="num">이격도</th><th class="num">시가총액</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${nameCell(it)}${it.cheap && curCheapOK ? '<span class="badge val">저평가</span>' : ''} <span class="g ${it.best}">${it.best}</span> <span class="tag">${it.ago === 0 ? '오늘' : it.ago === 1 ? '어제' : it.ago + '일 전'}</span>${regimeTag(it.rules)}<br>${it.rules.filter(r => rules[r] && ok(rules[r].grade)).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('')}</td>
+      ${items.map(it => `<tr><td>${nameCell(it)}${it.cheap && curCheapOK ? '<span class="badge val">저평가</span>' : ''} <span class="g ${it.best}">${it.best}</span>${hotTag(it)} <span class="tag">${it.ago === 0 ? '오늘' : it.ago === 1 ? '어제' : it.ago + '일 전'}</span>${regimeTag(it.rules)}<br>${it.rules.filter(r => rules[r] && ok(rules[r].grade)).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('')}</td>
         <td class="sector sector-col">${esc(it.sector)}</td><td class="num">${it.gap == null ? '-' : (it.gap > 0 ? '+' : '') + it.gap + '%'}</td><td class="num">${fmtCap(it.cap)}</td></tr>`).join('')}
     </tbody></table>` : (passed.length ? '<div class="empty">오늘은 해당 종목 없음</div>' : '')}
     ${(meta.rules || []).length ? `<details class="defs"><summary>규칙과 등급 보기 ▾</summary>${meta.rules.map(r => `<div><span class="g ${r.grade}">${r.grade}</span> <b>${esc(r.name)}</b> — ${esc(r.desc)}</div>`).join('')}</details>` : ''}
@@ -418,7 +420,7 @@ function renderValue(data, meta) {
   const all = (data.value || []).filter(matchQ);
   const items = state.vTrend ? all.filter(it => it.aligned.length || it.rules.length) : all;
   const num = (v, suf = '') => v == null ? '-' : v + suf;
-  const ruleChips = it => it.rules.filter(r => rules[r]).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('');
+  const ruleChips = it => it.rules.filter(r => rules[r] && rules[r].grade !== 'C').map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('');
   return `<section>
     <div class="sec-head"><h2>💎 저평가 종목</h2><span class="count">${items.length}종목</span></div>
     <div class="note" style="margin:6px 0 10px"><b>PER·PBR이 같은 업종 중간값보다 모두 낮고, ROE 5% 이상</b>인 종목입니다. 위에서부터 저평가 점수(싸고 수익성 좋은 정도, 100점 만점)가 높은 순입니다.
@@ -428,10 +430,10 @@ function renderValue(data, meta) {
     ${vr.length ? `<div class="rt-wrap"><table class="sc" style="margin-bottom:10px"><thead><tr><th>저평가 규칙 검증</th><th class="num">등급</th><th class="num">20일 평균 대비</th><th class="num">건수</th></tr></thead><tbody>
       ${vr.map(r => `<tr><td style="white-space:normal">${esc(r.name)}</td><td class="num"><span class="g ${r.grade}">${r.grade}</span></td><td class="num">${r.all ? pctS(r.all.excess) : '<span class="tag">데이터 부족</span>'}</td><td class="num">${r.all ? r.all.n : '-'}</td></tr>`).join('')}
     </tbody></table></div>` : ''}
-    ${items.length ? `<table><thead><tr><th>종목 · 추세</th><th class="num">PER</th><th class="num">PBR</th><th class="num">ROE</th><th class="num">점수</th></tr></thead><tbody>
+    ${items.length ? `<table><thead><tr><th>종목 · 추세</th><th class="num">PER</th><th class="num">PBR</th><th class="num">ROE</th><th class="num sector-col">점수</th></tr></thead><tbody>
       ${items.map(it => `<tr><td>${nameCell(it)} <span class="tag">${esc(it.sector)}</span><br>${alignTag(it)}${ruleChips(it)}</td>
         <td class="num">${num(it.per)}${it.oneoff ? '<br><span class="chip w" title="PER이 아주 낮으면 일회성 이익일 수 있습니다">일회성?</span>' : ''}</td><td class="num">${num(it.pbr)}</td><td class="num">${num(it.roe, '%')}</td>
-        <td class="num"><span class="score ${scoreCls(it.vs)}">${num(it.vs)}</span></td></tr>`).join('')}
+        <td class="num sector-col"><span class="score ${scoreCls(it.vs)}">${num(it.vs)}</span></td></tr>`).join('')}
     </tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
     <div class="note" style="margin-top:8px">※ 저평가 판단은 그날 이미 공개됐던 실적만 씁니다(12월 결산은 다음 해 4월부터 반영). 과거 재무가 약 3~4년치뿐이라 검증 기간은 정배열 규칙보다 짧습니다.</div>
   </section>`;
@@ -505,9 +507,9 @@ function wrTestTable(meta) {
   const base = T.find(r => r.id === 'WT0');
   const vs = r => base && base.all && r.all && r.id !== 'WT0' ? ` <span class="${r.all.excess > base.all.excess ? 'ret-up' : 'ret-dn'}">(${r.all.excess > base.all.excess ? '기준보다 ↑' : '기준보다 ↓'})</span>` : '';
   return `<div class="sub-h">⑥-1 %R 5년 검증 — 20일 뒤 평균 대비 (다음 날 종가 진입)</div>
-    <div class="rt-wrap"><table class="sc rt"><thead><tr><th>조건</th><th class="num">등급</th><th class="num">전체</th><th class="num">앞 기간</th><th class="num">뒤 기간</th>${rlab ? `<th class="num">지금<br>${rlab}</th>` : ''}</tr></thead><tbody>
+    <div class="rt-wrap"><table class="sc rt"><thead><tr><th>조건</th><th class="num">등급</th><th class="num">전체</th><th class="num y1">앞 기간</th><th class="num y1">뒤 기간</th>${rlab ? `<th class="num">지금<br>${rlab}</th>` : ''}</tr></thead><tbody>
     ${T.map(r => `<tr><td style="white-space:normal" title="${esc(r.desc)}">${esc(r.name)}${vs(r)}</td><td class="num"><span class="g ${r.grade}">${r.grade}</span></td>
-      <td class="num">${c(r.all)}</td><td class="num">${c(r.train)}</td><td class="num">${c(r.test)}</td>${rk ? `<td class="num">${c(r[rk])}</td>` : ''}</tr>`).join('')}
+      <td class="num">${c(r.all)}</td><td class="num y1">${c(r.train)}</td><td class="num y1">${c(r.test)}</td>${rk ? `<td class="num">${c(r[rk])}</td>` : ''}</tr>`).join('')}
     </tbody></table></div>
     <div class="note">%R이 −80·−20 기준선을 지나는 날을 지난 5년치 고가·저가로 검증한 결과입니다(기존 규칙·후보·등급과 무관한 관찰용). 첫 줄(정배열 종목 아무 때나)보다 확실히 높아야 그 %R 신호가 쓸모 있다고 볼 수 있습니다.
       등급 기준은 위 규칙과 같습니다(앞·뒤 기간 모두 비용 0.3%보다 높고 t값 충분). 지금 구성종목으로 과거를 계산해 실제보다 좋게 나올 수 있습니다.</div>`;
