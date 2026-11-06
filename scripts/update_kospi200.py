@@ -1051,10 +1051,13 @@ WR_TESTS = [
     {"id": "WT2", "name": "정배열 + %R −80 위로 복귀 (바닥 탈출)", "desc": "−80 이하였던 %R이 −80 위로 다시 올라온 날"},
     {"id": "WT3", "name": "정배열 + %R −20 위로 진입 (꼭대기)", "desc": "%R이 −20 이상으로 처음 올라간 날 (최근 2주 꼭대기)"},
     {"id": "WT4", "name": "정배열 + %R −20 아래로 이탈 (꼭대기 이탈)", "desc": "−20 이상이던 %R이 −20 아래로 내려온 날"},
+    {"id": "WT7", "name": "역배열 종목 (매월 초, 비교 기준)", "desc": "20<60<120일선 역배열(하락 추세) 종목을 매달 첫 거래일에 산다고 가정"},
+    {"id": "WT5", "name": "역배열 + 2주 저점 근처로 내려온 날", "desc": "역배열 종목의 %R이 −80 이하로 처음 내려간 날"},
+    {"id": "WT6", "name": "역배열 + 2주 저점 근처에서 벗어난 날", "desc": "역배열 종목의 %R이 −80 이하에서 −80 위로 올라온 날 (반등 시작)"},
 ]
 
 
-def wr_test_fires(price, wr, mid):
+def wr_test_fires(price, wr, mid, rev=None):
     """%R 기준선(−80, −20)을 지나는 날을 5년치로 검증하기 위한 사건 (관찰용 — 후보·등급과 무관)"""
     lo, hi = _b(wr <= WR_PULL), _b(wr >= -20)
     lo_p, hi_p = lo.shift(1, fill_value=False), hi.shift(1, fill_value=False)
@@ -1066,7 +1069,11 @@ def wr_test_fires(price, wr, mid):
             "WT1": mid & valid & lo & ~lo_p,
             "WT2": mid & valid & ~lo & lo_p,
             "WT3": mid & valid & hi & ~hi_p,
-            "WT4": mid & valid & ~hi & hi_p}
+            "WT4": mid & valid & ~hi & hi_p,
+            **({} if rev is None else {
+                "WT7": rev & mfirst,
+                "WT5": rev & valid & lo & ~lo_p,
+                "WT6": rev & valid & ~lo & lo_p})}
 
 
 def williams_r(price, hl=None, n=WR_N):
@@ -1222,7 +1229,10 @@ def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
             m_prev, st_prev = sec_mask[s["id"]].loc[prev], sec_streak[s["id"]].loc[prev]
             items = [{"code": t, **info[t], "days": int(st[t]), "full": bool(full.loc[d, t]),
                       "gap": _r(gap20.loc[d, t]), "score": _r(score.loc[d, t], 0),
-                      "volr": _r(volr.loc[d, t], 2), "wr": _r(wr.loc[d, t], 0)}
+                      "volr": _r(volr.loc[d, t], 2), "wr": _r(wr.loc[d, t], 0),
+                      # 이동평균은 늦게 따라오므로, 종가가 이미 꺾였거나 큰 흐름이 하락이면 표시 (정배열 판정 자체는 그대로)
+                      "x5": bool(price.loc[d, t] < ma[5].loc[d, t]),
+                      "bigdn": bool(ma[60].loc[d, t] < ma[120].loc[d, t] and price.loc[d, t] < ma[60].loc[d, t])}
                      for t in m_today[m_today].index]
             dropped = [{"code": t, "name": info[t]["name"], "days": int(st_prev[t])}
                        for t in m_prev[m_prev & ~m_today].index]
@@ -1313,8 +1323,9 @@ def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap, rfires)
     wr_summary = None   # %R 관찰 기록은 5년 검증(⑥-1)으로 대체 — 검증상 쓸모가 없어 중단
-    wr_test = grade_rules(price, wr_test_fires(price, wr, sec_mask["mid"]), mshort,
-                          rules=WR_TESTS, nodedupe=("WT0",))
+    rev = _b(ma[20] < ma[60]) & _b(ma[60] < ma[120])
+    wr_test = grade_rules(price, wr_test_fires(price, wr, sec_mask["mid"], rev), mshort,
+                          rules=WR_TESTS, nodedupe=("WT0", "WT7"))
     meta = {"wr_test": wr_test, "regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "forward_wr": wr_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,
             "breadth": breadth(price, sec_mask, full),
             "scorecard": scorecard(price, sec_streak, sig, mshort, ew, regime),
