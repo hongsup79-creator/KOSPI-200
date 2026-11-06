@@ -1312,7 +1312,7 @@ def build(ix, price, vol, info, source, demo, updated, fund=None, hl=None):
             f.unlink()
     chart_data(ix["id"], price, info, {k: v for k, v in rfires.items() if k != "V0"}, gmap, sig, val)
     fwd_summary = None if demo else forward_log(ix["id"], price, cands, dates[-1].strftime("%Y-%m-%d"), gmap, rfires)
-    wr_summary = None if demo else forward_wr(ix["id"], price, wr, sec_mask["mid"], info, dates[-1].strftime("%Y-%m-%d"))
+    wr_summary = None   # %R 관찰 기록은 5년 검증(⑥-1)으로 대체 — 검증상 쓸모가 없어 중단
     wr_test = grade_rules(price, wr_test_fires(price, wr, sec_mask["mid"]), mshort,
                           rules=WR_TESTS, nodedupe=("WT0",))
     meta = {"wr_test": wr_test, "regime_now": _r(mshort.iloc[-1]), "forward": fwd_summary, "forward_wr": wr_summary, "cost": COST, "dates": sorted(keep, reverse=True), "updated": updated, "demo": demo, "source": source,

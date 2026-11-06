@@ -126,7 +126,7 @@
   .alert.danger { background: rgba(214,54,59,0.10); border-color: var(--red); }
   .alert.warn { background: var(--notice-bg); border-color: var(--notice-text); color: var(--notice-text); }
   .alert.good { background: var(--green-bg); border-color: var(--green); }
-  .views { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 16px; }
+  .views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 16px; }
   .views button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px;
                   font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
   .views button b { display: block; font-size: 20px; color: var(--text); margin-top: 2px; }
@@ -159,7 +159,7 @@
   .sb.up { color: #fff; background: var(--up); } .sb.dn { color: #fff; background: var(--dn); }
   .sb.pull { color: var(--notice-text); background: var(--notice-bg); } .sb.off { color: var(--muted); border: 1px solid var(--line); } .tri-pull { color: var(--notice-text); font-weight: 700; }
   .fwd-list td { font-size: 12px; padding: 6px 3px; }
-  @media (max-width: 520px) { .views { grid-template-columns: repeat(3, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
+  @media (max-width: 520px) { .views { grid-template-columns: repeat(2, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
   .badge.val { background: var(--tab-on); color: var(--accent); }
   .badge.wr { background: var(--wr); color: #fff; font-weight: 700; }
   .wrc { display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end; }
@@ -167,6 +167,13 @@
   .wrbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--muted); border-radius: 4px; }
   .wrc.on { color: var(--wr); font-weight: 700; } .wrc.on .wrbar i { background: var(--wr); }
   .sb.wr { color: #fff; background: var(--wr); }
+  .hold-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  .hold-form label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+  .hold-form input { width: 110px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .hold-hint { margin: 0 0 10px; }
+  .notice a { color: inherit; font-weight: 700; }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
 </style>
 </head>
@@ -234,14 +241,23 @@ const panel = () => document.getElementById('panel');
 const OVERHEAT = 15;   // 20일선 대비 +15% 이상이면 과열 배지
 const scoreCls = v => v == null ? 'lo' : v >= 70 ? 'hi' : v >= 40 ? 'mid' : 'lo';
 const WR_PULL = -80;   // 윌리엄스 %R 이 이하면 '눌림' 배지 (관찰용)
-const wrBadge = it => it.wr != null && it.wr <= WR_PULL ? `<span class="badge wr" title="윌리엄스 %R(14일) ${it.wr} — 최근 14일 범위의 하단 20% (관찰용, 규칙 아님)">◆ %R 눌림 ${it.wr}</span>` : '';
+// %R 바닥권이 5년 검증에서 '정배열 아무 때나'보다 못했으면 경고 표시 (지수별·국면별로 자동 판단)
+let wrWarn = '';
+function setWrWarn(meta) {
+  const T = meta.wr_test || [], b = T.find(r => r.id === 'WT0'), w = T.find(r => r.id === 'WT1');
+  const rn = meta.regime_now, rk = rn == null ? null : rn <= 20 ? 'cold' : rn >= 50 ? 'hot' : null;
+  const pick = r => (rk && r[rk]) || r.all;
+  wrWarn = b && w && pick(b) && pick(w) && pick(w).excess < pick(b).excess
+    ? `과거 5년${rk ? (rk === 'cold' ? ' 약세장' : ' 강세장') : ''}: 이 자리에서 산 종목이 정배열 평균보다 못했음 (${pick(w).excess}% vs ${pick(b).excess}%)` : '';
+}
+const wrBadge = it => it.wr != null && it.wr <= WR_PULL ? `<span class="badge wr" title="윌리엄스 %R(14일) ${it.wr} — 최근 14일 범위의 하단 20% (관찰용, 규칙 아님)${wrWarn ? ' · ' + wrWarn : ''}">◆ %R 눌림 ${it.wr}</span>${wrWarn ? '<span class="badge hot" title="' + wrWarn + '">과거엔 불리</span>' : ''}` : '';
 const wrCell = it => it.wr == null ? '<td class="num tag">-</td>' :
-  `<td class="num"><span class="wrc ${it.wr <= WR_PULL ? 'on' : ''}" title="윌리엄스 %R(14일): 0=최근 14일 꼭대기, −100=바닥. −80 이하면 눌림(관찰용)"><span class="wrbar"><i style="width:${Math.max(4, 100 + it.wr)}%"></i></span>${it.wr}</span></td>`;
+  `<td class="num"><span class="wrc" title="윌리엄스 %R(14일): 0=최근 2주 꼭대기, −100=바닥. 위치 표시일 뿐 매매 신호가 아닙니다${wrWarn ? ' · ' + wrWarn : ''}"><span class="wrbar"><i style="width:${Math.max(4, 100 + it.wr)}%"></i></span>${it.wr}</span></td>`;
 let curWr = {};
 function row(it) {
   const hot = it.gap != null && it.gap >= OVERHEAT;
   return `<tr>
-    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}${wrBadge(it)}</td>
+    <td><a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${it.full ? '<span class="badge">완전정배열</span>' : ''}${hot ? `<span class="badge hot" title="20일선 대비 +${it.gap}%">과열 +${Math.round(it.gap)}%</span>` : ''}</td>
     <td class="sector sector-col">${esc(it.sector)}</td>
     <td class="num">${it.days}일</td>
     ${wrCell(it)}
@@ -273,7 +289,7 @@ function renderSection(s, idx) {
       <span class="rule">${s.mas.map(m => m + '일선').join(' &gt; ')}</span>
       <span class="count">${q ? items.length + ' / ' : ''}${s.items.length}종목</span></div>
     ${chips.length ? `<div class="changes">${chips.join('')}</div>` : '<div style="height:12px"></div>'}
-    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num" title="윌리엄스 %R(14일) — 막대가 짧을수록 최근 2주 바닥권">%R</th><th class="num">추세강도</th><th class="num">시가총액</th></tr></thead>
+    ${items.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">연속</th><th class="num" title="윌리엄스 %R(14일) — 막대가 길수록 최근 2주 꼭대기, 짧을수록 바닥 (위치 표시, 매매 신호 아님)">%R</th><th class="num">추세강도</th><th class="num">시가총액</th></tr></thead>
       <tbody>${body}</tbody></table>` : '<div class="empty">해당 종목 없음</div>'}
   </section>`;
 }
@@ -319,16 +335,38 @@ function drawThermo(meta) {
 // 신호 성적표
 const pctS = v => v == null ? '<span class="tag">-</span>' : `<span class="${v > 0 ? 'ret-up' : v < 0 ? 'ret-dn' : ''}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
 const matchQ = it => { const q = state.q.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q) || (it.sector || '').toLowerCase().includes(q) || it.code.includes(q); };
-let curSig = {};
+let curSig = {}, curCheapOK = true, curRegime = null;
 const sigBadge = code => { const v = curSig[code] || {};
   let b = '';
   if (v.u) b += v.g === 'C' ? '<span class="sb off" title="그날 켜진 규칙(등급 미달)">△</span>' : `<span class="sb up" title="그날 상승 초입 규칙 (${v.g}등급)">▲${v.g}</span>`;
   if (v.d) b += v.d === 'pull' ? '<span class="sb pull" title="그날 눌림 (60일선 상승 중)">▽눌림</span>' : '<span class="sb dn" title="그날 하락 경고 (60일선 꺾임)">▼경고</span>';
   return b; };
-const wrSb = code => curWr[code] != null && curWr[code] <= -80 ? `<span class="sb wr" title="윌리엄스 %R(14일) ${curWr[code]} — 최근 2주 범위의 바닥권 (관찰용)">◆%R</span>` : '';
-const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}${wrSb(it.code)}`;
+const wrSb = code => curWr[code] != null && curWr[code] <= -80 ? `<span class="sb wr" title="윌리엄스 %R(14일) ${curWr[code]} — 최근 2주 범위의 바닥권 (관찰용)${wrWarn ? ' · ' + wrWarn : ''}">◆%R${wrWarn ? ' ⚠' : ''}</span>` : '';
+const nameCell = it => `<a class="name" data-code="${it.code}" href="${fnguide(it.code)}" target="_blank" rel="noopener">${esc(it.name)}</a>${sigBadge(it.code)}`;
 const alignTag = it => it.aligned && it.aligned.length
   ? `<span class="chip">${it.aligned.includes('mid') ? '중기' : ''}${it.aligned.length === 2 ? '·' : ''}${it.aligned.includes('short') ? '단기' : ''} 정배열</span>` : '';
+
+// 지금 국면(약세장/강세장)에서 그 규칙들의 과거 성적을 신호 옆에 바로 보여 줌
+function regimeInfo(meta) {
+  const rn = meta.regime_now;
+  const k = rn == null ? null : rn <= 20 ? 'cold' : rn >= 50 ? 'hot' : null;
+  return k ? { k, label: k === 'cold' ? '약세장' : '강세장', rn, rules: Object.fromEntries((meta.rules || []).map(r => [r.id, r])) } : null;
+}
+function regimeTag(rules) {
+  const R = curRegime; if (!R || !rules || !rules.length) return '';
+  const vals = rules.map(r => R.rules[r] && R.rules[r].grade !== 'C' && R.rules[r][R.k] ? R.rules[r][R.k].excess : null).filter(v => v != null);
+  if (!vals.length) return '';
+  const v = Math.max(...vals);
+  return `<span class="badge ${v < 0 ? 'hot' : 'val'}" title="지금 같은 ${R.label}에서 이 규칙의 과거 20일 성적(평균 대비, 가장 좋은 규칙 기준)">${R.label} 과거 ${pctS(v)}</span>`;
+}
+function regimeBanner() {
+  const R = curRegime; if (!R) return '';
+  const ab = Object.values(R.rules).filter(r => r.grade !== 'C' && r.id[0] === 'R' && r[R.k]);
+  if (!ab.length) return '';
+  const neg = ab.filter(r => r[R.k].excess < 0).length;
+  return `<div class="alert ${R.k === 'cold' ? 'warn' : 'good'}"><b>${R.k === 'cold' ? '🧊' : '🔥'} 지금은 ${R.label} (단기 정배열 ${R.rn}%)</b>
+    이 국면에서 검증 통과(A·B) 규칙 ${ab.length}개 중 <b>${neg}개가 과거 평균보다 못했습니다.</b> 각 신호 옆의 ‘${R.label} 과거 ±%’를 함께 보세요.</div>`;
+}
 
 function renderToday(data, meta) {
   if (!data.today) return `<section><div class="empty">새 데이터가 아직 없습니다. 데이터 갱신을 한 번 실행해 주세요.</div></section>`;
@@ -339,19 +377,16 @@ function renderToday(data, meta) {
   const chips = x => (x.u || []).map(r => rules[r] ? `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>` : '').join('');
   const gapS = g => g == null ? '-' : (g > 0 ? '+' : '') + g + '%';
   const table = (arr, withRules) => arr.length ? `<table><thead><tr><th>종목</th><th class="sector-col">섹터</th><th class="num">20일선 대비</th><th class="num sector-col">시가총액</th></tr></thead><tbody>
-    ${arr.map(x => `<tr><td>${nameCell(x)} ${alignTag(x)}${withRules ? '<br>' + chips(x) : ''}</td><td class="sector sector-col">${esc(x.sector)}</td>
+    ${arr.map(x => `<tr><td>${nameCell(x)} ${alignTag(x)}${withRules && x.g !== 'C' ? regimeTag(x.u) : ''}${withRules ? '<br>' + chips(x) : ''}</td><td class="sector sector-col">${esc(x.sector)}</td>
       <td class="num">${gapS(x.gap)}</td><td class="num sector-col">${fmtCap(x.cap)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:10px 0">없음</div>';
   return `<section>
     <div class="sec-head"><h2>🔔 ${data.date} 장 마감 기준 신호</h2><span class="count">${all.length}종목</span></div>
     <div class="note" style="margin:6px 0 4px">이 날 <b>새로 신호가 뜬 종목만</b> 모았습니다. 신호는 장 마감 후 확정되므로 실제 대응은 <b>다음 거래일</b>입니다. 종목명을 누르면 차트와 손절선이 나옵니다.</div>
+    ${regimeBanner()}
     <div class="sub-h"><span class="tri-up">▲ 상승 초입</span> — 검증 통과(A·B) 규칙 · ${up.length}</div>${table(up, true)}
     <div class="sub-h"><span class="tri-pull">▽ 눌림</span> — 정배열 종목이 꺾였지만 60일선은 상승 중 · ${pull.length}</div>${table(pull, false)}
     <div class="sub-h"><span class="tri-dn">▼ 하락 경고</span> — 정배열 종목이 꺾였고 60일선도 꺾임 · ${dn.length}</div>${table(dn, false)}
-    ${(() => { const f = meta.forward_wr; if (!f) return '';
-      const ev = (f.items || []).filter(x => x.date === data.date && matchQ(x));
-      return `<div class="sub-h"><span style="color:var(--wr)">◆ %R 눌림 진입</span> — 중기 정배열 종목이 최근 2주 바닥권(−80 이하)에 처음 들어옴 · ${ev.length} <span class="tag">관찰용·미검증</span></div>
-        ${ev.length ? `<table><thead><tr><th>종목</th><th class="num">%R</th></tr></thead><tbody>${ev.map(x => `<tr><td>${nameCell(x)}</td><td class="num"><span class="wrc on">${x.wr}</span></td></tr>`).join('')}</tbody></table>`
-                    : `<div class="empty" style="padding:10px 0">${data.date < f.since ? '관찰 기록 시작(' + f.since.slice(5) + ') 이전 날짜' : '없음'}</div>`}`; })()}
+
     ${weak.length ? `<details class="defs"><summary>△ 등급 미달 규칙이 켜진 종목 ${weak.length}개 보기 ▾</summary>${table(weak, true)}</details>` : ''}
     <div class="note" style="margin-top:10px">▽·▼는 자동 매도 신호가 아닙니다(성적표 ② 참고). 지금 시장 국면에 따라 규칙 성적이 달라지니 성적표 ⓪의 ‘지금 약세장/강세장’ 칸도 함께 보세요.</div>
   </section>`;
@@ -362,14 +397,14 @@ function renderCands(data, meta) {
   const ok = g => state.gA ? g === 'A' : (g === 'A' || g === 'B');
   let items = (data.cands || []).filter(matchQ).filter(c => c.rules.some(r => rules[r] && ok(rules[r].grade)));
   const passed = (meta.rules || []).filter(r => ok(r.grade));
-  return `<section>
+  return `${regimeBanner()}<section>
     <div class="sec-head"><h2>🎯 검증된 후보</h2><span class="count">${items.length}종목</span></div>
     <div class="note" style="margin:6px 0 10px">5년 데이터의 <b>앞 기간('22~'24)과 뒤 기간('25~'26) 모두에서</b> 시장 평균을 이긴 규칙이 최근 3거래일 안에 켜진 종목입니다. 성적은 다음 날 종가에 산 기준이라, <b>오늘·어제 켜진 종목</b>이 검증 조건에 가장 가깝습니다.
       <span class="g A">A</span> 두 기간 모두 + 통계적으로 확실 · <span class="g B">B</span> 두 기간 모두 +
       <label class="toggle"><input type="checkbox" id="gA" ${state.gA ? 'checked' : ''}> A등급만</label></div>
     ${passed.length ? '' : '<div class="empty">지금 데이터로는 통과한 규칙이 없습니다.</div>'}
     ${items.length ? `<table><thead><tr><th>종목 · 켜진 규칙</th><th class="sector-col">섹터</th><th class="num">이격도</th><th class="num">시가총액</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${nameCell(it)}${it.cheap ? '<span class="badge val">저평가</span>' : ''} <span class="g ${it.best}">${it.best}</span> <span class="tag">${it.ago === 0 ? '오늘' : it.ago === 1 ? '어제' : it.ago + '일 전'}</span><br>${it.rules.filter(r => rules[r] && ok(rules[r].grade)).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('')}</td>
+      ${items.map(it => `<tr><td>${nameCell(it)}${it.cheap && curCheapOK ? '<span class="badge val">저평가</span>' : ''} <span class="g ${it.best}">${it.best}</span> <span class="tag">${it.ago === 0 ? '오늘' : it.ago === 1 ? '어제' : it.ago + '일 전'}</span>${regimeTag(it.rules)}<br>${it.rules.filter(r => rules[r] && ok(rules[r].grade)).map(r => `<span class="chip ${rules[r].grade}" title="${esc(rules[r].desc)}">${esc(rules[r].name)}</span>`).join('')}</td>
         <td class="sector sector-col">${esc(it.sector)}</td><td class="num">${it.gap == null ? '-' : (it.gap > 0 ? '+' : '') + it.gap + '%'}</td><td class="num">${fmtCap(it.cap)}</td></tr>`).join('')}
     </tbody></table>` : (passed.length ? '<div class="empty">오늘은 해당 종목 없음</div>' : '')}
     ${(meta.rules || []).length ? `<details class="defs"><summary>규칙과 등급 보기 ▾</summary>${meta.rules.map(r => `<div><span class="g ${r.grade}">${r.grade}</span> <b>${esc(r.name)}</b> — ${esc(r.desc)}</div>`).join('')}</details>` : ''}
@@ -525,7 +560,7 @@ function scoreTable(meta) {
   const ex = sc.exits.map(e => e.n ? `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td>
       <td class="num">${pctS(e.ret20)}${e.sig ? (e.t < 0 ? ' ✅' : ' ⚠️') : ''}</td><td class="num">${pctS(e.ctrl20)}</td><td class="num">${pctS(e.dd20)}</td></tr>`
     : `<tr><td><b>${esc(e.name)}</b></td><td class="num tag" colspan="4">사례 없음</td></tr>`).join('');
-  const mk = sc.market.map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
+  const mk = sc.market.filter(e => e.id !== 'crash').map(e => `<tr><td><b>${esc(e.name)}</b></td><td class="num">${e.n}</td><td class="num">${pctS(e.ret20)}</td><td class="num">${pctS(e.all20)}</td></tr>`).join('');
   return `<section><details>
     <summary><div class="sec-head"><h2>신호 성적표</h2><span class="count">어떤 신호가 실제로 맞았나</span></div></summary>
     <div class="note" style="margin:10px 0"><b>${sc.from} ~ ${sc.to || ''}</b>, 신호가 켜진 <b>다음 날 종가</b>에 샀다고 가정했습니다(신호는 장 마감 후에야 알 수 있으므로). 같은 종목의 같은 신호는 20거래일에 한 번만 셉니다. 가격은 네이버 통합 시세(정규장 + 넥스트레이드 애프터마켓, 오후 8시 확정)라 증권사 앱의 15:30 종가와 조금 다를 수 있습니다.
@@ -533,18 +568,24 @@ function scoreTable(meta) {
       <b>✅ = 우연으로 보기 어려운 차이</b>(같은 달 신호끼리 묶어 계산한 t값 2 이상, 12개월 이상). ✅가 없는 숫자는 운일 수 있습니다. ⚠️는 반대로 확실히 나빴다는 뜻입니다.
       연도별 숫자가 해마다 같은 방향이면 믿을 만한 신호입니다.</div>
     ${rulesTable(meta)}
-    <div class="sub-h">① 개별 신호 — 평균 대비 (아래: 승률 · 건수)</div>
-    <div class="rt-wrap"><table class="sc"><thead><tr><th>신호</th><th class="num h5">5일</th><th class="num">10일</th><th class="num">20일</th><th class="num">20일<br>강세/약세</th></tr></thead><tbody>${ent}</tbody></table></div>
-    <div class="note">강세장 = 단기 정배열 비율 50% 이상인 날 신호, 약세장 = 20% 이하인 날 신호. 위 두 줄(정배열 신규)은 비교 기준입니다.</div>
     <div class="sub-h">② 꺾임 경보 — 경보 뒤 20일</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">건수</th><th class="num">경보 종목<br>수익</th><th class="num">경보 없는<br>정배열 종목</th><th class="num">경보 후<br>최대 하락</th></tr></thead><tbody>${ex}</tbody></table></div>
     <div class="note">같은 달끼리 비교해 경보 종목이 확실히 <b>더 나빴으면 ✅</b>(팔아서 이득), 확실히 <b>더 좋았으면 ⚠️</b>(팔면 손해, 반등)입니다.</div>
     ${fwdTable(meta)}
     ${wrTestTable(meta)}
-    ${wrTable(meta)}
     <div class="sub-h">③ 시장 국면 경보 — 경보 뒤 20일 구성종목 평균</div>
     <div class="rt-wrap"><table class="sc"><thead><tr><th>경보</th><th class="num">횟수</th><th class="num">경보 뒤</th><th class="num">평소</th></tr></thead><tbody>${mk}</tbody></table></div>
   </details></section>`;
+}
+
+// 오늘 기준으로 이미 나와 있어야 할 최신 거래일 (평일 20:05 이후면 오늘, 아니면 직전 평일; 공휴일은 모름)
+function expectedDate() {
+  const k = new Date(Date.now() + 9 * 3600e3);
+  const mins = k.getUTCHours() * 60 + k.getUTCMinutes();
+  let d = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate()));
+  const wk = x => x.getUTCDay() >= 1 && x.getUTCDay() <= 5;
+  if (!(wk(d) && mins >= 20 * 60 + 5)) { do { d = new Date(d - 864e5); } while (!wk(d)); }
+  return d.toISOString().slice(0, 10);
 }
 
 async function renderAlignment(ixId) {
@@ -555,11 +596,21 @@ async function renderAlignment(ixId) {
   const date = state.date[ixId] || meta.dates[0];
   const data = await getJSON(ix.dir + date + '.json');
   curSig = data.sig || {};
+  curRegime = regimeInfo(meta);
+  setWrWarn(meta);
   curWr = {}; (data.sections || []).forEach(sec => sec.items.forEach(it => { if (it.wr != null) curWr[it.code] = it.wr; }));
   if (state.tab !== ixId) return;
+  // 저평가: 5년 검증에서 '저평가 종목(V0)'이 평균보다 나았던 지수에서만 보여 줌 (코스닥은 확실히 나빴음)
+  const v0 = (meta.rules || []).find(r => r.id === 'V0');
+  const showValue = !!(data.has_value && v0 && v0.all && v0.all.excess > 0);
+  if (!showValue) data.value = [];
+  curCheapOK = showValue;
+  if (state.view === 'exits' || state.view === 'early' || (state.view === 'value' && !showValue)) state.view = 'today';
 
   const notices = [];
   if (meta.demo) notices.push('데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.');
+  const exp = expectedDate();
+  if (meta.dates[0] < exp) notices.push(`아직 <b>${exp}</b> 장 마감 데이터가 반영되지 않았습니다(지금 화면은 ${meta.dates[0]} 기준). GitHub 자동 실행은 보통 밤늦게~새벽에 반영됩니다. 지금 보려면 <a href="https://github.com/hongsup79-creator/KOSPI-200/actions/workflows/update.yml" target="_blank" rel="noopener">데이터 갱신 → Run workflow</a>. (공휴일이면 무시)`);
   if (meta.source === 'marketcap') notices.push(`공식 ${ix.name} 구성종목을 받지 못해 시가총액 상위 종목으로 대신 계산했습니다.`);
 
   panel().innerHTML = `
@@ -574,19 +625,20 @@ async function renderAlignment(ixId) {
       <input class="search" id="q" type="search" placeholder="종목명·섹터 검색" value="${esc(state.q)}">
       <div class="note">${ix.name} 구성 ${data.universe}종목${meta.source === 'etf' ? ` (${ixId === 'kospi200' ? 'KODEX 200' : 'KODEX 코스닥150'} 보유종목 기준)` : ''} · 종목명을 누르면 <b>진입·경고 시점 차트</b>${date !== meta.dates[0] ? ' · <b style="color:var(--notice-text)">지난 날짜를 보는 중 — 차트·손절선·저평가 숫자는 최신 기준</b>' : ''}</div>
     </div>
-    ${(data.alerts || []).map(a => `<div class="alert ${a.kind}"><b>🚨 ${esc(a.title)}</b>${esc(a.desc)}</div>`).join('')}
+    ${(data.alerts || []).filter(a => a.title !== '급랭').map(a => `<div class="alert ${a.kind}"><b>🚨 ${esc(a.title)}</b>${esc(a.desc)}</div>`).join('')}
+    <div id="hold" data-ix="${ixId}"></div>
     ${thermo(meta, ix)}
     <div class="views" id="views">
       ${[['today','🔔 그날 신호', (data.today || []).filter(x => (x.u && x.g !== 'C') || x.d).length],
          ['cands','🎯 검증 후보', (() => { const g = Object.fromEntries((meta.rules || []).map(r => [r.id, r.grade])); return (data.cands || []).filter(c => c.rules.some(r => g[r] === 'A' || g[r] === 'B')).length; })()],
          ['aligned','📈 정배열', data.sections.map(x => x.items.length).join(' · ')],
-         ['value','💎 저평가', data.has_value ? (data.value || []).length : '-'],
-         ['exits','📉 조정 중', (data.exits || []).length]]
+         ...(showValue ? [['value','💎 저평가', (data.value || []).length]] : [])]
         .map(([k, l, n]) => `<button data-v="${k}" class="${state.view === k ? 'on' : ''}">${l}<b>${n}</b></button>`).join('')}
     </div>
     <div id="secs"></div>
     ${scoreTable(meta)}`;
   drawThermo(meta);
+  renderHoldings();
 
   const body = () => state.view === 'today' ? renderToday(data, meta) : state.view === 'cands' ? renderCands(data, meta) : state.view === 'early' ? renderEarly(data, meta) : state.view === 'value' ? renderValue(data, meta)
     : state.view === 'exits' ? renderExits(data, meta) : data.sections.map(renderSection).join('');
@@ -738,6 +790,66 @@ function renderSoon(title) {
   panel().innerHTML = `<section><div class="empty"><b>${title}</b><br>다음 단계에서 추가됩니다.<br>묶음별 수익률 추이 차트 · 1개월/3개월/전체 · 변동률/종가 전환</div></section>`;
 }
 
+// ---------------------------------------------------------- 💼 내 종목 손절 감시 (이 기기 브라우저에만 저장)
+const HKEY = 'str_holdings_v1';
+const loadH = () => { try { return JSON.parse(localStorage.getItem(HKEY) || '[]'); } catch { return []; } };
+const saveH = h => { try { localStorage.setItem(HKEY, JSON.stringify(h)); return true; } catch { return false; } };
+function holdForm(ixId, code, name, last, st, latestDate, fmtP) {
+  const h = loadH().find(x => x.ix === ixId && x.code === code);
+  const defStop = st.dv ? Math.round(last * (1 - Math.min(st.dv * 3, 30) / 100)) : Math.round(last * 0.92);
+  return `<div class="sub-h">💼 내 종목 손절 감시</div>
+    <div class="hold-form" data-ix="${ixId}" data-code="${code}" data-name="${esc(name)}">
+      <label>매수가 <input type="number" inputmode="decimal" id="hBuy" value="${h ? h.buy : Math.round(last)}"></label>
+      <label>손절가 <input type="number" inputmode="decimal" id="hStop" value="${h ? h.stop : defStop}"></label>
+      <label>매수일 <input type="date" id="hDate" value="${h ? h.date : latestDate}"></label>
+      <button type="button" id="hSave">${h ? '수정 저장' : '내 종목에 추가'}</button>${h ? '<button type="button" id="hDel" class="ghost">감시 해제</button>' : ''}
+      <span class="tag" id="hMsg"></span>
+    </div>
+    <div class="note">손절가는 위 손절선 계산의 출렁임 기준(${fmtP(defStop)}원)을 기본으로 넣었습니다. <b>이 기기 브라우저에만 저장</b>되어 다른 사람에게 보이지 않습니다(PC와 휴대폰은 따로 입력).</div>`;
+}
+function bindHoldForm(box) {
+  const f = box.querySelector('.hold-form'); if (!f) return;
+  const msg = t => { box.querySelector('#hMsg').textContent = t; };
+  box.querySelector('#hSave').onclick = () => {
+    const buy = +box.querySelector('#hBuy').value, stop = +box.querySelector('#hStop').value, date = box.querySelector('#hDate').value;
+    if (!(buy > 0 && stop > 0)) return msg('매수가와 손절가를 입력해 주세요');
+    if (stop >= buy) return msg('손절가는 매수가보다 낮아야 합니다');
+    const h = loadH().filter(x => !(x.ix === f.dataset.ix && x.code === f.dataset.code));
+    h.push({ ix: f.dataset.ix, code: f.dataset.code, name: f.dataset.name, buy, stop, date });
+    msg(saveH(h) ? '저장했습니다 ✓ (화면 위 ‘내 종목’에 표시)' : '이 브라우저에서는 저장할 수 없습니다');
+    box.querySelector('#hSave').textContent = '수정 저장';
+    renderHoldings();
+  };
+  const del = box.querySelector('#hDel');
+  if (del) del.onclick = () => { saveH(loadH().filter(x => !(x.ix === f.dataset.ix && x.code === f.dataset.code))); msg('감시를 해제했습니다'); renderHoldings(); };
+}
+async function renderHoldings() {
+  const el = document.getElementById('hold'); if (!el) return;
+  const ixId = el.dataset.ix, ix = INDEX[ixId];
+  const mine = loadH().filter(x => x.ix === ixId);
+  if (!mine.length) { el.innerHTML = `<div class="note hold-hint">💼 종목 차트 아래 <b>‘내 종목에 추가’</b>를 누르면, 여기서 매수가·손절선 대비 상태를 매일 보여 줍니다.</div>`; return; }
+  let cd; try { cd = await getJSON(ix.dir + 'charts.json'); } catch { cd = { stocks: {} }; }
+  const fmt = v => v == null ? '-' : v >= 1000 ? Math.round(v).toLocaleString() : (+v).toFixed(2);
+  const rows = mine.map(h => {
+    const st = cd.stocks[h.code]; const cs = st ? st.c.filter(v => v != null) : [];
+    const cur = cs.length ? cs[cs.length - 1] : null;
+    if (cur == null) return `<tr><td>${esc(h.name)}</td><td colspan="3" class="tag">지금 ${ix.name} 구성종목이 아니어서 가격을 받을 수 없습니다</td></tr>`;
+    const ret = (cur / h.buy - 1) * 100, dist = (cur / h.stop - 1) * 100;
+    const sig = curSig[h.code] || {};
+    const flags = [cur <= h.stop ? '<span class="sb dn">손절선 이탈</span>' : dist < 5 ? '<span class="sb pull">손절선 근접</span>' : '',
+      st.m20 && cur < st.m20 ? '<span class="sb off">20일선 아래</span>' : '',
+      sig.d === 'down' ? '<span class="sb dn">▼경고</span>' : sig.d === 'pull' ? '<span class="sb pull">▽눌림</span>' : ''].join('');
+    const lamp = cur <= h.stop ? '🔴' : dist < 5 ? '🟡' : '🟢';
+    return `<tr><td>${lamp} <a class="name" data-code="${h.code}" href="${fnguide(h.code)}" target="_blank" rel="noopener">${esc(h.name)}</a>${flags}<br><span class="tag">${h.date.slice(5)} 매수 ${fmt(h.buy)} · 손절 ${fmt(h.stop)}</span></td>
+      <td class="num">${fmt(cur)}</td><td class="num">${pctS(ret)}</td><td class="num">${cur <= h.stop ? '<b class="ret-dn">이탈</b>' : '+' + dist.toFixed(1) + '%'}</td></tr>`;
+  }).join('');
+  const broken = mine.some(h => { const st = cd.stocks[h.code]; const cs = st ? st.c.filter(v => v != null) : []; return cs.length && cs[cs.length - 1] <= h.stop; });
+  el.innerHTML = `<section class="hold"><div class="sec-head"><h2>💼 내 종목</h2><span class="count">${mine.length}종목 · ${cd.dates ? cd.dates[cd.dates.length - 1] : ''} 종가 기준</span></div>
+    ${broken ? '<div class="alert danger"><b>🔴 손절선을 넘은 종목이 있습니다.</b>미리 정한 규칙대로라면 정리할 시점입니다.</div>' : ''}
+    <table><thead><tr><th>종목</th><th class="num">현재가</th><th class="num">수익률</th><th class="num">손절선까지</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">이 기기 브라우저에만 저장됩니다. 수정·해제는 종목명을 눌러 차트 아래에서 하세요.</div></section>`;
+}
+
 // 손절선 계산기: 틀렸을 때 얼마에 나올지 먼저 정하기
 function stopBox(st, last, fmtP) {
   if (!last) return '';
@@ -802,7 +914,7 @@ async function openChart(ixId, code) {
   const box = document.createElement('div');
   box.className = 'modal';
   box.innerHTML = `<div class="box" role="dialog" aria-label="${esc(st.n)} 차트">
-    <div class="top"><h2>${esc(st.n)}</h2>${curWr[code] != null ? `<span class="badge ${curWr[code] <= -80 ? 'wr' : ''}" title="윌리엄스 %R(14일)">%R ${curWr[code]}</span>` : ''}<span class="tag">${code} · ${fmtP(lastClose)}원${st.v ? ` · PER ${st.v[0] ?? '-'} · PBR ${st.v[1] ?? '-'} · ROE ${st.v[2] ?? '-'}%` : ''}</span>${st.v && st.v[3] ? '<span class="badge val">저평가</span>' : ''}${st.v && st.v[0] != null && st.v[0] < 4 ? '<span class="badge hot" title="PER이 아주 낮으면 자산 매각 등 일회성 이익일 수 있습니다">일회성 이익?</span>' : ''}
+    <div class="top"><h2>${esc(st.n)}</h2>${curWr[code] != null ? `<span class="badge" title="윌리엄스 %R(14일): 0=최근 2주 꼭대기, −100=바닥 (위치 표시)">%R ${curWr[code]}</span>` : ''}<span class="tag">${code} · ${fmtP(lastClose)}원${st.v ? ` · PER ${st.v[0] ?? '-'} · PBR ${st.v[1] ?? '-'} · ROE ${st.v[2] ?? '-'}%` : ''}</span>${st.v && st.v[3] && curCheapOK ? '<span class="badge val">저평가</span>' : ''}${st.v && st.v[0] != null && st.v[0] < 4 ? '<span class="badge hot" title="PER이 아주 낮으면 자산 매각 등 일회성 이익일 수 있습니다">일회성 이익?</span>' : ''}
       <button class="x" type="button">닫기</button></div>
     <div class="legend" style="margin-top:8px">
       <span><span class="tri-up">▲</span> 상승 초입 (A·B등급 규칙)</span><span><span class="tri-off">△</span> 등급 미달 규칙</span>
@@ -813,10 +925,12 @@ async function openChart(ixId, code) {
     ${rows ? `<table class="mk" style="margin-top:8px"><thead><tr><th class="num">날짜</th><th>신호</th><th class="num">이후 수익</th></tr></thead><tbody>${rows}</tbody></table>`
            : '<div class="empty">최근 6개월 동안 신호가 없었습니다.</div>'}
     ${stopBox(st, lastClose, fmtP)}
+    ${holdForm(ixId, code, st.n, lastClose, st, cd.dates[cd.dates.length - 1], fmtP)}
     <div class="note" style="margin-top:10px">${dnNote(meta)}</div>
     <div style="margin-top:12px"><a class="name" href="${fnguide(code)}" target="_blank" rel="noopener">FnGuide 기업정보 열기 ↗</a></div>
   </div>`;
   document.body.appendChild(box);
+  bindHoldForm(box);
   let chart;
   const close = () => { if (chart) chart.destroy(); box.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = e => { if (e.key === 'Escape') close(); };
