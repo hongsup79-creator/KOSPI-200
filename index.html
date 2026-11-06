@@ -736,7 +736,7 @@ async function renderSector() {
 const RANGES = [['1m','1개월',21],['3m','3개월',63],['6m','6개월',126],['1y','1년',252],['all','전체',99999]];
 const RET = [['1일',1],['1주',5],['1개월',21],['3개월',63],['1년',252]];
 const linkFor = (market, code) => market === 'kr'
-  ? `https://m.stock.naver.com/domestic/stock/${code}/total`
+  ? (/^\d{6}$/.test(code) ? `https://m.stock.naver.com/domestic/stock/${code}/total` : `https://m.stock.naver.com/domestic/index/${code}/total`)
   : `https://finance.yahoo.com/quote/${encodeURIComponent(code)}`;
 const fmtPrice = (v, market) => v == null ? '-' :
   (market === 'kr' ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 2 }));
@@ -762,7 +762,7 @@ async function renderTrend(market) {
     <div class="controls">
       <div class="seg" id="rg">${RANGES.map(([k, l]) => `<button data-k="${k}" class="${state.range === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="seg" id="md">${[['pct','변동률(%)'],['price','종가']].map(([k, l]) => `<button data-k="${k}" class="${state.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="note">${market === 'us' ? '미국은 한국 시간 기준 전날 밤 종가까지 반영 · ' : ''}변동률 = 기간 첫날을 100으로 놓은 값 · 묶음은 config/groups.json에서 수정</div>
+      <div class="note">${market === 'us' ? '미국은 한국 시간 기준 전날 밤 종가까지 반영 · <b>시장 분위기</b>(환율·VIX·금리)는 <b>오를수록 주식에 부담</b> · ' : ''}변동률 = 기간 첫날을 100으로 놓은 값 · 묶음은 config/groups.json에서 수정</div>
     </div>
     ${d.groups.map((g, gi) => `<section>
       <div class="sec-head"><h2>${esc(g.name)}</h2><span class="count">${g.series.length}개 종목</span></div>
