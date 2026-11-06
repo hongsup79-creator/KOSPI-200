@@ -768,7 +768,7 @@ async function renderTrend(market) {
       <div class="sec-head"><h2>${esc(g.name)}</h2><span class="count">${g.series.length}개 종목</span></div>
       <div class="chart-box"><canvas id="c${gi}"></canvas></div>
       <div class="legend">${g.series.map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(s.name)}</span>`).join('')}</div>
-      <div class="rt-wrap"><table class="rt"><thead><tr><th>종목</th><th class="num">현재가</th>${RET.map(r => `<th class="num${r[1] === 252 ? ' y1' : ''}">${r[0]}</th>`).join('')}</tr></thead>
+      <div class="rt-wrap"><table class="rt"><thead><tr><th>종목</th><th class="num">${market === 'us' ? `종가<br><span class="tag">${d.dates[d.dates.length - 1].slice(5).replace('-', '/')} 현지</span>` : '현재가'}</th>${RET.map(r => `<th class="num${r[1] === 252 ? ' y1' : ''}">${market === 'us' && r[1] === 1 ? '전일 대비' : r[0]}</th>`).join('')}</tr></thead>
         <tbody>${g.series.map((s, i) => {
           const c = s.close, last = c[c.length - 1];
           return `<tr><td><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><a class="name" href="${linkFor(market, s.code)}" target="_blank" rel="noopener">${esc(s.name)}</a></td>
