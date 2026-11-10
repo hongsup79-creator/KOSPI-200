@@ -1225,7 +1225,7 @@ async function renderGauge() {
 // ---------------------------------------------------------- 🛢️ 유가 vs 코스피 (관찰용, 규칙 아님)
 // "유가는 코스피를 선행한다"를 쉬운 말로: k개월 전 유가와 이번 달 코스피가 같은 방향(둘 다 오름/내림)이었던 비율.
 // 50% = 동전 던지기(미리 알 수 없음). 표본 n개월이면 ±100/√n %p 밖이어야 우연으로 보기 어려움
-const OIL_RANGES = [['3y', '3년', 3], ['5y', '5년', 5], ['all', '전체', 99]];
+const OIL_RANGES = [['3m', '3개월', 0.25], ['6m', '6개월', 0.5], ['1y', '1년', 1], ['3y', '3년', 3], ['5y', '5년', 5], ['all', '전체', 99]];
 // 비교 단위: 일(거래일)·주·월. per = 1년에 들어가는 개수, mo = 1개월에 들어가는 개수(밀기 슬라이더용)
 const OIL_UNIT = {
   d: { name: '일', per: 250, mo: 21, same: '전날 밤 유가', step: k => `${k}거래일`, short: k => k ? k + '일' : '전날 밤' },
@@ -1335,7 +1335,7 @@ async function renderOil() {
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.raw != null,
         callbacks: { label: it => it.datasetIndex === 0 ? ` 코스피 ${Math.round(it.raw).toLocaleString()}` : ` ${it.dataset.label} $${it.raw}${state.oShift ? ` (${state.oShift}개월 전 값)` : ''}` } } },
-      scales: { x: { ...ax, ticks: { ...ax.ticks, maxTicksLimit: 5, maxRotation: 0, callback: (v, i) => W.dates[st + i].slice(2, 7).replace('-', '.') } },
+      scales: { x: { ...ax, ticks: { ...ax.ticks, maxTicksLimit: 5, maxRotation: 0, callback: (v, i) => { const dt = W.dates[st + i]; return state.oRange === '3m' || state.oRange === '6m' || (state.oRange === '1y' && state.oUnit !== 'm') ? dt.slice(5).replace('-', '/') : dt.slice(2, 7).replace('-', '.'); } } },
                 y: { ...ax, position: 'left', ticks: { ...ax.ticks, callback: v => Math.round(v).toLocaleString() } },
                 y1: { ...ax, position: 'right', grid: { drawOnChartArea: false }, ticks: { ...ax.ticks, callback: v => '$' + Math.round(v) } } } } });
   charts.push(pc);
