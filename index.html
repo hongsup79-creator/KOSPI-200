@@ -1236,12 +1236,16 @@ async function renderOil() {
   const flip = L[0].all != null && L[0].recent != null && Math.sign(L[0].all) !== Math.sign(L[0].recent) && Math.abs(L[0].recent) >= 0.1;
   const yrs = d.from.slice(0, 4);
   const rs = v => v == null ? '-' : (v > 0 ? '+' : '') + v.toFixed(2);
+  const dir = r => r > 0 ? '유가가 오르면 코스피도 오름' : '유가가 오르면 코스피는 내림';
+  const weak = lead.length === 1 && Math.abs(lead[0].all) < 0.25;   // 13개 시차를 한꺼번에 보면 하나쯤은 우연히 넘을 수 있음
+  const recentTxt = leadR.length ? ` 최근 ${d.recent_months}개월만 보면 ${leadR.map(l => `${l.k}개월 앞 r ${rs(l.recent)}`).join(', ')}로 선행이 보이지만, 표본이 ${d.recent_months}개월뿐이라 국면이 바뀌면 사라질 수 있습니다.` : '';
   const verdict = lead.length
-    ? `<div class="verdict ok"><b>유가가 ${lead.map(l => l.k + '개월').join('·')} 앞선 관계가 기준을 넘었습니다</b> (r ${lead.map(l => rs(l.all)).join(', ')}, 기준 ±${thr}).
-       다만 r이 이 정도면 코스피 움직임 중 유가로 설명되는 부분은 ${Math.round(Math.max(...lead.map(l => l.all * l.all)) * 100)}% 정도입니다.${leadR.length ? '' : ' <b>최근 3년에는 이 선행이 보이지 않습니다.</b>'}</div>`
+    ? `<div class="verdict ${weak ? 'no' : 'ok'}"><b>${yrs}년 이후 전체: 유가가 ${lead.map(l => `${l.k}개월 앞설 때 r ${rs(l.all)}`).join(', ')}</b> (${dir(lead[0].all)}, 기준 ±${thr}).
+       코스피 움직임 중 유가로 설명되는 부분은 ${Math.round(Math.max(...lead.map(l => l.all * l.all)) * 100)}% 정도${weak ? '이고, 시차 13개를 한꺼번에 보면 하나쯤은 우연히 기준을 넘을 수 있어 <b>믿을 만한 선행으로 보긴 어렵습니다.</b>' : '입니다.'}
+       ${back.length ? `반대로 코스피가 ${back.map(l => -l.k + '개월').join('·')} 앞선 쪽도 기준을 넘었습니다.` : ''}${recentTxt}</div>`
     : `<div class="verdict no"><b>유가가 앞선 관계(1~6개월)는 ${yrs}년 이후 데이터에서 기준을 넘지 못했습니다.</b>
        가장 큰 값도 ${best ? best.k + '개월 앞 r ' + rs(best.all) : '-'} (기준 ±${thr}).
-       같은 달 상관은 r ${rs(L[0].all)}로, <b>둘은 '같이' 움직일 뿐 유가가 먼저 움직인다고 보긴 어렵습니다.</b>${back.length ? ` 오히려 코스피가 ${back.map(l => -l.k + '개월').join('·')} 앞선 쪽이 기준을 넘었습니다.` : ''}</div>`;
+       같은 달 상관은 r ${rs(L[0].all)}로, <b>유가가 먼저 움직인다고 보긴 어렵습니다.</b>${back.length ? ` 오히려 코스피가 ${back.map(l => -l.k + '개월').join('·')} 앞선 쪽이 기준을 넘었습니다.` : ''}${recentTxt}</div>`;
   const C = Object.fromEntries(d.cond.map(c => [c.id, c])), b3 = C.base.h['3'];
   const cell = r => r && r.n ? `<td class="num">${r.avg > 0 ? '+' : ''}${r.avg}%<br><span class="tag">상승 ${r.win}% · ${r.n}번</span></td>` : '<td class="num tag">사례 없음</td>';
   const now3 = d.now.brent_3m, nowId = now3 >= 10 ? 'up' : now3 <= -10 ? 'dn' : 'base';
