@@ -242,6 +242,56 @@
   .sc td:first-child { min-width: 108px; }
   .notice a { color: inherit; font-weight: 700; }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
+  /* ---------- 오늘 요약: 시세 띠 · 계기판 · 신호판 */
+  .ticker { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px 0;
+            border-bottom: 1px solid var(--line); padding-bottom: 12px; font-variant-numeric: tabular-nums; }
+  .ticker::-webkit-scrollbar { display: none; }
+  .ticker li { display: flex; flex-direction: column; padding: 0 14px; border-left: 1px solid var(--line); font-size: 14px; white-space: nowrap; }
+  .ticker li:first-child { padding-left: 0; border-left: 0; }
+  .ticker .tn { color: var(--muted); font-size: 12px; } .ticker .tv { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+  .ticker .tdate { grid-column: 1 / -1; border-left: 0; padding: 0; color: var(--muted); font-size: 12px; text-align: right; }
+  .cockpit { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); padding: 0; overflow: hidden; }
+  .verdict { padding: 26px 26px 22px; background: var(--sunk); border-right: 1px solid var(--line); }
+  .cockpit.cold .verdict { background: var(--cold-bg); } .cockpit.good .verdict { background: var(--green-bg); } .cockpit.hot .verdict { background: var(--hot-bg); }
+  .verdict .hh { font-size: clamp(28px, 4.4vw, 40px); font-weight: 800; letter-spacing: -0.045em; line-height: 1.15; margin-bottom: 14px; }
+  .cockpit.cold .hh { color: var(--dn); } .cockpit.good .hh { color: var(--green); } .cockpit.hot .hh { color: var(--top); }
+  .verdict .ha { font-size: 16px; line-height: 1.7; max-width: 34em; }
+  .lamph { margin: 22px 0 8px; font-size: 13px; color: var(--muted); }
+  .lamps { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; }
+  .lamp { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+  .lamp i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); flex: 0 0 auto; }
+  .lamp span { margin-left: auto; font-weight: 500; font-size: 13px; color: var(--muted); }
+  .lamp.on i { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 4px var(--green-bg); } .lamp.on span { color: var(--green); font-weight: 700; }
+  .lamp.weak i { background: linear-gradient(90deg, var(--muted) 50%, transparent 50%); }
+  .gauges { padding: 22px 24px; display: grid; gap: 18px; align-content: center; }
+  .ggh { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .ggh strong { font-size: 20px; color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .ggt { position: relative; height: 10px; margin: 6px 0 22px; background: var(--grid); border-radius: 2px; }
+  .ggt > i { position: absolute; top: 0; bottom: 0; }
+  .gz-cold { background: color-mix(in srgb, var(--dn) 28%, transparent); } .gz-hot { background: color-mix(in srgb, var(--top) 30%, transparent); }
+  .gm { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+  .gm span { position: absolute; top: 17px; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ggt u { position: absolute; top: -5px; width: 4px; height: 20px; margin-left: -2px; background: var(--text); border-radius: 2px; box-shadow: 0 0 0 2px var(--panel); }
+  .ghost { position: absolute; top: -2px; width: 0; height: 14px; border-left: 2px dotted var(--text); opacity: .4; }
+  .ggn { font-size: 12px; color: var(--muted); }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin-top: 10px; }
+  .sigh { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .sigh b { font-size: 15px; }
+  .sigr { display: grid; grid-template-columns: 84px 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--grid); font-size: 13px; align-items: start; }
+  .sigr:last-child { border-bottom: 0; } .sigr > span { padding-top: 4px; white-space: nowrap; }
+  .sn { font: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--sunk); border: 1px solid transparent; border-radius: 4px;
+        padding: 3px 9px; margin: 0 4px 4px 0; cursor: pointer; }
+  .sn:hover { border-color: var(--text); }
+  .sn.up { box-shadow: inset 3px 0 0 var(--up); } .sn.dn { box-shadow: inset 3px 0 0 var(--dn); } .sn.pull { box-shadow: inset 3px 0 0 var(--notice-text); }
+  .sn small { margin-left: 5px; font-size: 11px; color: var(--up); font-weight: 800; }
+  .none { color: var(--muted); display: inline-block; padding-top: 4px; }
+  @media (max-width: 760px) {
+    .cockpit { grid-template-columns: 1fr; } .verdict { border-right: 0; border-bottom: 1px solid var(--line); padding: 22px 18px 18px; }
+    .gauges { padding: 20px 18px; } .sigs { grid-template-columns: 1fr; gap: 18px; }
+    .ticker { grid-template-columns: repeat(3, 1fr); gap: 10px 0; }
+    .ticker li { padding: 0 10px; border-left: 1px solid var(--line); }
+    .ticker li:nth-child(3n+1) { padding-left: 0; border-left: 0; } .ticker .tdate { text-align: left; }
+  }
 </style>
 </head>
 <body>
@@ -1237,15 +1287,49 @@ async function renderHome() {
   const mk = [['코스피', chg(kr, '코스피')], ['코스닥', chg(kr, '코스닥')]];
   const usk = [['S&P 500', chg(us, 'S&P500')], ['나스닥', chg(us, '나스닥 종합')], ['반도체', chg(us, '필라델피아 반도체')], ['VIX', chg(us, 'VIX 공포지수')]];
   const usDate = us ? us.dates[us.dates.length - 1].slice(5).replace('-', '/') : '';
-  const tile = ([n, v], inv) => `<div class="htile"><div class="tag">${n}</div><div class="hv">${v ? (v.last >= 1000 ? Math.round(v.last).toLocaleString() : v.last.toFixed(2)) : '-'}</div><div>${v ? (inv ? `<span class="${v.d > 0 ? 'ret-dn' : 'ret-up'}">${v.d > 0 ? '+' : ''}${v.d.toFixed(2)}%</span>` : pc(v.d)) : ''}</div></div>`;
-  // 3) 오늘 신호
+  const krDate = ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : '';
+  const fmtV = v => v.last >= 1000 ? Math.round(v.last).toLocaleString() : v.last.toFixed(2);
+  const tick = ([n, v], inv) => `<li><span class="tn">${n}</span><span class="tv">${v ? fmtV(v) : '-'}</span>${v ? (inv
+      ? `<span class="${v.d > 0 ? 'ret-dn' : 'ret-up'}">${v.d > 0 ? '+' : ''}${v.d.toFixed(2)}%</span>` : pc(v.d)) : ''}</li>`;
+  // 계기판: 값이 눈금 위 어디에 있는지 (구간 색 + 기준선 + 바늘)
+  const gauge = ({ name, v, min, max, rev, zones, marks, ghost, val, note }) => {
+    if (v == null) return '';
+    const at = x => Math.min(100, Math.max(0, rev ? (max - x) / (max - min) * 100 : (x - min) / (max - min) * 100));
+    const z = zones.map(([a, b, c]) => { const l = Math.min(at(a), at(b)), r = Math.max(at(a), at(b));
+      return `<i class="gz-${c}" style="left:${l}%;width:${r - l}%"></i>`; }).join('');
+    const m = marks.map(([x, t]) => `<b class="gm" style="left:${at(x)}%"><span>${t}</span></b>`).join('');
+    return `<div class="gg"><div class="ggh"><span>${name}</span><strong>${val}</strong></div>
+      <div class="ggt">${z}${m}${ghost != null ? `<em class="ghost" style="left:${at(ghost)}%" title="최근 10일 최고"></em>` : ''}<u style="left:${at(v)}%"></u></div>
+      <div class="ggn">${note}</div></div>`;
+  };
+  const b200 = br.find(b => b.k === 'kospi200'), b150 = br.find(b => b.k === 'kosdaq150');
+  const brNote = b => `${b.now <= 20 ? '약세장' : b.now >= 50 ? '강세장' : '보통'}${b.d5 != null ? ` · 5일 ${b.d5 > 0 ? '+' : ''}${b.d5.toFixed(1)}%p` : ''}`;
+  const gauges = [
+    K && K.now.dd != null ? gauge({ name: '코스피 1년 최고가 대비', v: K.now.dd, min: -50, max: 0, rev: true, zones: [[-20, -50, 'cold']], marks: [[-20, '−20%']],
+      val: `${K.now.dd}%`, note: `${K.now.dd <= -20 ? '많이 빠짐' : '정상 범위'}${K.now.gap != null ? ` · 120일선 대비 ${K.now.gap}%` : ''}` }) : '',
+    ...[b200, b150].filter(b => b && b.now != null).map(b => gauge({ name: `${b.name} 체온계`, v: b.now, min: 0, max: 100,
+      zones: [[0, 20, 'cold'], [50, 100, 'hot']], marks: [[20, '20'], [50, '50']], val: `${b.now}%`, note: brNote(b) })),
+    VX ? gauge({ name: 'VIX 공포지수', v: VX.now, min: 10, max: 45, zones: [[30, 45, 'cold'], [10, 13, 'hot']], marks: [[13, '13'], [30, '30']], ghost: VX.max10,
+      val: VX.now, note: `어젯밤 미국 · 최근 10일 최고 ${VX.max10}` }) : '',
+  ].join('');
+  // 바닥 확인 신호 2개: 켜졌는지, 과거에도 맞았는지
+  const lamp = (label, list) => {
+    const st = list.length ? (list.some(t => t.active && gaugeJudge(t)[0] === 'ok') ? 'on' : list.some(t => t.active) ? 'weak' : 'off') : 'off';
+    return `<li class="lamp ${st}"><i></i>${label}<span>${st === 'on' ? '켜짐' : st === 'weak' ? '켜짐 · 과거엔 효과 없음' : '꺼짐'}</span></li>`;
+  };
+  const tests = id => g ? g.markets.map(m => m.tests.find(t => t.id === id)).filter(Boolean) : [];
+  const lamps = g ? `<ul class="lamps">${lamp('VIX 급등 후 꺾임', tests('vix_turn').slice(0, 1))}${lamp('체온계 10% → 20% 회복', tests('br_up'))}</ul>` : '';
+  // 3) 오늘 신호: 종목명을 바로 보여주고 누르면 차트
+  const chipList = (k, arr, cls) => arr.length
+    ? arr.map(x => `<button class="sn ${cls}" data-ix="${k}" data-code="${x.code}">${esc(x.name)}${x.g && cls === 'up' ? `<small>${x.g}</small>` : ''}</button>`).join('')
+    : '<span class="none">없음</span>';
   const sigs = Object.entries(ix).map(([k, v]) => {
     const t = (v.data && v.data.today) || [];
     const up = t.filter(x => x.u && x.g !== 'C'), dn = t.filter(x => x.d === 'down'), pl = t.filter(x => x.d === 'pull');
-    const nm = arr => arr.slice(0, 4).map(x => esc(x.name)).join(', ') + (arr.length > 4 ? ` 외 ${arr.length - 4}` : '');
-    return `<div class="hsig" data-go="${k}"><b>${INDEX[k].name}</b>
-      <div><span class="tri-up">▲ 상승 초입 ${up.length}</span>${up.length ? ` <span class="tag">${nm(up)}</span>` : ''}</div>
-      <div><span class="tri-dn">▼ 하락 경고 ${dn.length}</span>${dn.length ? ` <span class="tag">${nm(dn)}</span>` : ''} · <span class="tri-pull">▽ 눌림 ${pl.length}</span></div></div>`;
+    return `<div class="sigcol"><div class="sigh"><b>${INDEX[k].name}</b><button class="lnk" data-go="${k}">전체 보기</button></div>
+      <div class="sigr"><span class="tri-up">▲ 상승 초입</span><div>${chipList(k, up, 'up')}</div></div>
+      <div class="sigr"><span class="tri-pull">▽ 눌림</span><div>${chipList(k, pl, 'pull')}</div></div>
+      <div class="sigr"><span class="tri-dn">▼ 하락 경고</span><div>${chipList(k, dn, 'dn')}</div></div></div>`;
   }).join('');
   // 4) 내 종목
   const mine = loadH();
@@ -1262,17 +1346,19 @@ async function renderHome() {
       🔴 이탈 ${cnt.r} · 🟡 근접 ${cnt.y} · 🟢 여유 ${cnt.g}${cnt.x ? ` · 가격 없음 ${cnt.x}` : ''}`;
   }
   panel().innerHTML = `
-    <section class="hero ${cls}"><div class="hh">${head}</div><div class="ha">${advice}</div>
-      <ul class="hw">${why.map(w => `<li>${w}</li>`).join('')}</ul>
-      <div class="hgo"><button data-go="gauge">🌡️ 바닥·고점 자세히 →</button></div></section>
-    <section><div class="sec-head"><h2>📊 최근 장 마감</h2><span class="count">한국 ${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : ''} · 미국 ${usDate} (현지)</span></div>
-      <div class="hgrid two">${mk.map(x => tile(x)).join('')}</div>
-      <div class="hgrid" style="margin-top:8px">${usk.map(x => tile(x)).join('')}</div>
-      <div class="note">VIX↑ = 불안↑ · <button class="lnk" data-go="us">미국 자세히 →</button> <button class="lnk" data-go="kr">국내 ETF 자세히 →</button></div></section>
-    <section><div class="sec-head"><h2>🔔 장 마감 신호</h2><span class="count">${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') + ' 기준 · ' : ''}누르면 해당 탭으로</span></div>${sigs}
-</section>
-    <section><div class="sec-head"><h2>💼 내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
-    ${ex('① 위 결론 상자로 오늘이 관찰 구간인지 확인 → ② 💼 내 종목에 🔴가 있으면 정한 대로 정리 → ③ 관찰 구간이 아니면 🔔 신호의 ▲ 종목을 눌러 차트·손절선 확인(과열·큰 흐름 하락 배지는 피하기) → ④ 한 달에 한 번 성적표의 실전 기록 확인', '📋 매일 보는 순서')}`;
+    <ul class="ticker" aria-label="최근 장 마감">${mk.map(x => tick(x)).join('')}${usk.map((x, i) => tick(x, i === 3)).join('')}
+      <li class="tdate">한국 ${krDate} · 미국 ${usDate}</li></ul>
+    <section class="cockpit ${cls}">
+      <div class="verdict"><div class="hh">${head}</div><div class="ha">${advice}</div>
+        <div class="lamph">바닥 확인 신호</div>${lamps}
+        <button class="lnk" data-go="gauge">바닥·고점 근거 보기</button></div>
+      <div class="gauges">${gauges}</div>
+    </section>
+    <section><div class="sec-head"><h2>장 마감 신호</h2><span class="count">${krDate} 기준 · 종목을 누르면 차트와 손절선</span></div>
+      <div class="sigs">${sigs}</div></section>
+    <section><div class="sec-head"><h2>내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
+    ${ex('① 맨 위 결론으로 오늘이 관찰 구간인지 확인 → ② 내 종목에 🔴가 있으면 정한 대로 정리 → ③ 관찰 구간이 아니면 ▲ 종목을 눌러 차트·손절선 확인(과열·큰 흐름 하락 배지는 피하기) → ④ 한 달에 한 번 성적표의 실전 기록 확인', '📋 매일 보는 순서')}`;
+  panel().querySelectorAll('button.sn').forEach(b => b.onclick = () => openChart(b.dataset.ix, b.dataset.code));
   panel().querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     state.tab = b.dataset.go; if (INDEX[state.tab]) state.view = 'today';
     try { history.replaceState(null, '', '#' + state.tab); } catch {} render(); window.scrollTo(0, 0); });
@@ -1282,7 +1368,7 @@ async function renderHome() {
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  if (state.tab === 'home' || state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
+  if (state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();
