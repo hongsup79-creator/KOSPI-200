@@ -105,6 +105,10 @@
   .shift b { color: var(--text); min-width: 64px; font-variant-numeric: tabular-nums; }
   .verdict { background: var(--sunk); border-left: 4px solid var(--line); border-radius: 4px 6px 6px 4px; padding: 10px 12px; margin: 6px 0 10px; font-size: 14px; line-height: 1.6; }
   .verdict.ok { border-left-color: var(--green); } .verdict.no { border-left-color: var(--top); }
+  .otiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 4px 0 8px; }
+  .otile { background: var(--sunk); border-radius: 8px; padding: 10px 12px; }
+  .otl { font-size: 13px; color: var(--muted); }
+  .obig { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; margin: 2px 0 4px; }
   .rt td, .rt th { padding: 8px 4px; font-size: 13px; }
   .rt { margin-top: 8px; }
   .rt td:first-child { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
@@ -1219,81 +1223,114 @@ async function renderGauge() {
 }
 
 // ---------------------------------------------------------- 🛢️ 유가 vs 코스피 (관찰용, 규칙 아님)
-// "유가는 코스피를 선행한다"를 월간 수익률 상관으로 직접 확인. +k = 유가가 k개월 앞섬
-const OIL_RANGES = [['3y', '3년', 157], ['5y', '5년', 261], ['all', '전체', 1e9]];
+// "유가는 코스피를 선행한다"를 쉬운 말로: k개월 전 유가와 이번 달 코스피가 같은 방향(둘 다 오름/내림)이었던 비율.
+// 50% = 동전 던지기(미리 알 수 없음). 표본 n개월이면 ±100/√n %p 밖이어야 우연으로 보기 어려움
+const OIL_RANGES = [['3y', '3년', 3], ['5y', '5년', 5], ['all', '전체', 99]];
+// 비교 단위: 일(거래일)·주·월. per = 1년에 들어가는 개수, mo = 1개월에 들어가는 개수(밀기 슬라이더용)
+const OIL_UNIT = {
+  d: { name: '일', per: 250, mo: 21, same: '전날 밤 유가', step: k => `${k}거래일`, short: k => k ? k + '일' : '전날 밤' },
+  w: { name: '주', per: 52, mo: 4.345, same: '같은 주', step: k => `${k}주`, short: k => k ? k + '주' : '같은 주' },
+  m: { name: '월', per: 12, mo: 1, same: '같은 달', step: k => `${k}개월`, short: k => k ? k + '개월' : '같은 달' },
+};
+// 월 단위 가격 = 주간 종가에서 매달 마지막 주만
+function oilMonthly(W) {
+  const o = { dates: [], kospi: [], brent: [], wti: [] };
+  W.dates.forEach((dt, i) => { const last = i === W.dates.length - 1 || W.dates[i + 1].slice(0, 7) !== dt.slice(0, 7);
+    if (last) ['kospi', 'brent', 'wti'].forEach(c => o[c].push(W[c][i])), o.dates.push(dt); });
+  return o;
+}
 async function renderOil() {
   let d;
   try { d = await getJSON('data/oil.json'); }
   catch { panel().innerHTML = '<div class="empty">유가 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>'; return; }
   if (state.tab !== 'oil') return;
-  state.oRange = state.oRange || '5y'; state.oShift = state.oShift ?? 0;
-  const L = Object.fromEntries(d.lags.map(l => [l.k, l]));
-  const n0 = L[0].n, thr = +(2 / Math.sqrt(n0)).toFixed(2), thrR = +(2 / Math.sqrt(L[0].n_recent)).toFixed(2);
-  const sig = (r, t) => r != null && Math.abs(r) >= t;
-  const lead = d.lags.filter(l => l.k > 0 && sig(l.all, thr)), back = d.lags.filter(l => l.k < 0 && sig(l.all, thr));
-  const leadR = d.lags.filter(l => l.k > 0 && sig(l.recent, thrR));
-  const best = d.lags.filter(l => l.k > 0 && l.all != null).sort((a, b) => Math.abs(b.all) - Math.abs(a.all))[0];
-  const flip = L[0].all != null && L[0].recent != null && Math.sign(L[0].all) !== Math.sign(L[0].recent) && Math.abs(L[0].recent) >= 0.1;
+  if (!d.units) { panel().innerHTML = '<div class="empty">유가 데이터 형식이 바뀌었습니다.<br>다음 자동 갱신 후 다시 열어 주세요.</div>'; return; }
+  state.oRange = state.oRange || '5y'; state.oShift = state.oShift ?? 0; state.oUnit = state.oUnit || 'w';
+  const UN = OIL_UNIT[state.oUnit], U = d.units[state.oUnit];
   const yrs = d.from.slice(0, 4);
-  const rs = v => v == null ? '-' : (v > 0 ? '+' : '') + v.toFixed(2);
-  const dir = r => r > 0 ? '유가가 오르면 코스피도 오름' : '유가가 오르면 코스피는 내림';
-  const weak = lead.length === 1 && Math.abs(lead[0].all) < 0.25;   // 13개 시차를 한꺼번에 보면 하나쯤은 우연히 넘을 수 있음
-  const recentTxt = leadR.length ? ` 최근 ${d.recent_months}개월만 보면 ${leadR.map(l => `${l.k}개월 앞 r ${rs(l.recent)}`).join(', ')}로 선행이 보이지만, 표본이 ${d.recent_months}개월뿐이라 국면이 바뀌면 사라질 수 있습니다.` : '';
-  const verdict = lead.length
-    ? `<div class="verdict ${weak ? 'no' : 'ok'}"><b>${yrs}년 이후 전체: 유가가 ${lead.map(l => `${l.k}개월 앞설 때 r ${rs(l.all)}`).join(', ')}</b> (${dir(lead[0].all)}, 기준 ±${thr}).
-       코스피 움직임 중 유가로 설명되는 부분은 ${Math.round(Math.max(...lead.map(l => l.all * l.all)) * 100)}% 정도${weak ? '이고, 시차 13개를 한꺼번에 보면 하나쯤은 우연히 기준을 넘을 수 있어 <b>믿을 만한 선행으로 보긴 어렵습니다.</b>' : '입니다.'}
-       ${back.length ? `반대로 코스피가 ${back.map(l => -l.k + '개월').join('·')} 앞선 쪽도 기준을 넘었습니다.` : ''}${recentTxt}</div>`
-    : `<div class="verdict no"><b>유가가 앞선 관계(1~6개월)는 ${yrs}년 이후 데이터에서 기준을 넘지 못했습니다.</b>
-       가장 큰 값도 ${best ? best.k + '개월 앞 r ' + rs(best.all) : '-'} (기준 ±${thr}).
-       같은 달 상관은 r ${rs(L[0].all)}로, <b>유가가 먼저 움직인다고 보긴 어렵습니다.</b>${back.length ? ` 오히려 코스피가 ${back.map(l => -l.k + '개월').join('·')} 앞선 쪽이 기준을 넘었습니다.` : ''}${recentTxt}</div>`;
-  const C = Object.fromEntries(d.cond.map(c => [c.id, c])), b3 = C.base.h['3'];
-  const cell = r => r && r.n ? `<td class="num">${r.avg > 0 ? '+' : ''}${r.avg}%<br><span class="tag">상승 ${r.win}% · ${r.n}번</span></td>` : '<td class="num tag">사례 없음</td>';
+  const lags = U.lags, L = Object.fromEntries(lags.map(l => [l.k, l]));
+  // 판정: 50%에서 충분히 벗어났나
+  const judge = (v, n) => { if (v == null || !n) return 'coin'; const t = 100 / Math.sqrt(n); return v - 50 >= t ? 'same' : 50 - v >= t ? 'opp' : 'coin'; };
+  const jAll = l => judge(l.agree, l.agree_n), jRec = l => judge(l.agree_recent, l.agree_n_recent);
+  const leads = lags.filter(l => l.k > 0);
+  const best = leads.slice().sort((x, y) => Math.abs(y.agree - 50) - Math.abs(x.agree - 50))[0];
+  const bestR = leads.slice().sort((x, y) => Math.abs(y.agree_recent - 50) - Math.abs(x.agree_recent - 50))[0];
+  const hitAll = leads.filter(l => jAll(l) !== 'coin'), hitRec = leads.filter(l => jRec(l) !== 'coin');
+  const CHIP = { same: ['ok', '같은 방향 경향'], opp: ['no', '반대 방향 경향'], coin: ['few', '동전 던지기'] };
+  const chip = j => `<span class="jd ${CHIP[j][0]}">${CHIP[j][1]}</span>`;
+  const answer = hitAll.length
+    ? (jAll(hitAll[0]) === 'same' ? `어느 정도는요. 유가가 ${hitAll.map(l => UN.step(l.k)).join('·')} 먼저 같은 방향으로 움직이는 경향이 있습니다.`
+                                  : `반대로요. 유가가 오르면 ${hitAll.map(l => UN.step(l.k)).join('·')} 뒤 코스피는 내리는 경향이 있습니다.`)
+    : '아니요. 유가를 먼저 봐도 코스피 방향을 맞히는 건 동전 던지기 수준입니다.';
+  const same0 = jAll(L[0]);
+  const tile = (big, title, sub, j) => `<div class="otile"><div class="otl">${title}</div><div class="obig">${big}</div>${chip(j)}<div class="tag" style="font-size:12px;margin-top:4px">${sub}</div></div>`;
+  const b1 = d.now.brent_1m;
+  const nowTxt = hitRec.length && jRec(hitRec[0]) !== 'coin' && b1 != null
+    ? `최근 한 달 브렌트 ${pctS(b1)}. 최근 3년 경향(${UN.name} 단위)대로라면 ${UN.step(hitRec[0].k)} 뒤 코스피는 <b>${(b1 > 0) === (jRec(hitRec[0]) === 'same') ? '오르는' : '내리는'} 쪽</b>이지만, 맞힌 비율이 ${hitRec[0].agree_recent}%라 참고만 하세요.`
+    : `최근 한 달 브렌트 ${pctS(b1)}, 3개월 ${pctS(d.now.brent_3m)}. 위 결과상 <b>이 숫자로 코스피 방향을 점치긴 어렵습니다.</b>`;
+  const C = Object.fromEntries(d.cond.map(c => [c.id, c])), base3 = C.base.h['3'];
   const now3 = d.now.brent_3m, nowId = now3 >= 10 ? 'up' : now3 <= -10 ? 'dn' : 'base';
+  const condRow = (id, label) => { const r = C[id].h['3']; if (!r || !r.n) return '';
+    const diff = id === 'base' ? null : r.avg - base3.avg;
+    const ev = diff == null ? '' : r.n < 8 ? '<span class="jd few">사례 적음</span>' : diff >= 2 ? '<span class="jd ok">평소보다 좋았음</span>' : diff <= -2 ? '<span class="jd no">평소보다 나빴음</span>' : '<span class="jd few">평소와 비슷</span>';
+    return `<tr${id === 'base' ? ' class="base"' : ''}><td style="white-space:normal">${label}${id === nowId && id !== 'base' ? ' <span class="jd ok">지금 해당</span>' : ''}<br>${ev}</td>
+      <td class="num">${r.avg > 0 ? '+' : ''}${r.avg}%</td><td class="num">${r.win}%<br><span class="tag">${r.n}번</span></td></tr>`; };
   panel().innerHTML = `
     ${d.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
-    <div class="controls">
-      <div class="seg" id="orng">${OIL_RANGES.map(([k, l]) => `<button data-k="${k}" class="${state.oRange === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="note">${d.now.oil_date.slice(5).replace('-', '/')} 브렌트 <b>$${d.now.brent}</b> · WTI <b>$${d.now.wti}</b> · 브렌트 3개월 ${pctS(now3)} · 관찰용이며 매매 규칙에는 쓰지 않습니다</div>
-    </div>
     <section>
-      <div class="sec-head"><h2>📈 코스피와 유가</h2><span class="count">주간 종가</span></div>
-      <div class="legend"><span><i style="background:${css('--text')}"></i>코스피 (왼쪽)</span><span><i style="background:${COLORS[1]}"></i>브렌트 (오른쪽, $)</span><span><i style="background:${COLORS[3]}"></i>WTI</span></div>
+      <div class="sec-head"><h2>🛢️ 유가로 코스피를 미리 알 수 있을까?</h2><span class="count">${yrs}년~</span></div>
+      <div style="margin:8px 0 10px"><div class="tag" style="font-size:13px;margin-bottom:4px">비교 단위</div>
+        <div class="seg" id="ounit">${Object.entries(OIL_UNIT).map(([k, v]) => `<button data-k="${k}" class="${state.oUnit === k ? 'on' : ''}">${v.name} 단위</button>`).join('')}</div></div>
+      <div class="verdict ${hitAll.length ? 'ok' : 'no'}" style="font-size:15px"><b>${answer}</b></div>
+      <div class="otiles">
+        ${tile(L[0].agree + '%', UN.same + (state.oUnit === 'd' ? ' → 오늘 코스피' : ''), same0 === 'coin' ? '함께 움직인다고 보기 어려움' : same0 === 'same' ? '같이 움직임 (미리 알 순 없음)' : '서로 반대로 움직임', same0)}
+        ${tile(best.agree + '%', `유가가 먼저 (${UN.step(leads[0].k)}~${UN.step(leads[leads.length - 1].k)})`, `가장 잘 맞은 ${UN.step(best.k)} 기준 · ${best.agree_n.toLocaleString()}번 비교`, jAll(best))}
+        ${tile((bestR.agree_recent ?? '-') + '%', `최근 3년, 유가가 먼저`, `가장 잘 맞은 ${UN.step(bestR.k)} 기준 · ${bestR.agree_n_recent.toLocaleString()}번 비교`, jRec(bestR))}
+      </div>
+      <div class="one">🪙 숫자 = 유가와 코스피가 <b>같은 방향</b>(둘 다 오르거나 둘 다 내림)이었던 ${UN.name === '일' ? '날' : UN.name}의 비율. <b>50%면 동전 던지기</b>와 같아서 유가를 봐도 미리 알 수 없다는 뜻입니다.${state.oUnit === 'd' ? ' 일 단위의 <b>전날 밤 유가</b>는 한국 장이 끝나기 전 마지막 미국 유가 종가입니다.' : ''} 단위가 작을수록 비교 횟수가 많아 작은 차이도 잡히지만, 하루 이틀 움직임은 잡음이 큽니다.</div>
+      <div class="note" style="font-size:13px">📍 지금: ${nowTxt}</div>
+    </section>
+    <section>
+      <div class="sec-head"><h2>📈 두 그래프 겹쳐 보기</h2><span class="count">${{ d: '일간', w: '주간', m: '월간' }[state.oUnit]} 종가</span></div>
+      <div class="seg" id="orng" style="margin:6px 0">${OIL_RANGES.map(([k, l]) => `<button data-k="${k}" class="${state.oRange === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="legend"><span><i style="background:${css('--text')}"></i>코스피 (왼쪽 눈금)</span><span><i style="background:${COLORS[1]}"></i>브렌트유 (오른쪽, $${d.now.brent})</span><span><i style="background:${COLORS[3]}"></i>WTI ($${d.now.wti})</span></div>
       <div class="shift"><span>유가를 뒤로 밀기</span><input id="osh" type="range" min="0" max="6" step="1" value="${state.oShift}"><b id="oshv">${state.oShift ? state.oShift + '개월' : '그대로'}</b></div>
-      <div class="one">유가가 정말 앞서간다면, 몇 달 뒤로 밀었을 때 두 선이 더 잘 겹쳐야 합니다.</div>
+      <div class="one">👉 유가가 정말 먼저 움직인다면, 몇 달 뒤로 밀었을 때 검은 선(코스피)과 주황 선이 <b>더 잘 겹쳐야</b> 합니다.</div>
       <div style="position:relative;height:300px"><canvas id="och"></canvas></div>
     </section>
     <section>
-      <div class="sec-head"><h2>🔍 정말 선행할까?</h2><span class="count">월간 수익률 상관 · ${yrs}년~</span></div>
-      ${verdict}
-      <div class="legend"><span><i style="background:${COLORS[0]}"></i>전체 ${n0}개월</span><span><i style="background:${COLORS[2]}"></i>최근 ${d.recent_months}개월</span><span><span class="tag">점선 = 우연으로 보기 어려운 기준(±${thr})</span></span></div>
+      <div class="sec-head"><h2>🔍 유가를 얼마나 먼저 보면 맞을까?</h2><span class="count">${UN.name} 단위 · 같은 방향 비율</span></div>
+      <div class="legend"><span><i style="background:${COLORS[0]}"></i>${yrs}년~ 전체</span><span><i style="background:${COLORS[2]}"></i>최근 3년</span><span class="tag">흐린 막대 = 동전 던지기와 차이 없음</span></div>
       <div style="position:relative;height:240px"><canvas id="olag"></canvas></div>
-      <div class="note">가로축 <b>+3</b> = 3개월 전 유가 변화와 이번 달 코스피 변화의 상관, <b>−3</b> = 코스피가 3개월 앞선 경우. 막대가 점선 밖으로 나가야 의미 있는 관계로 봅니다.</div>
+      <div class="note">점선(50%)에서 멀리 떨어진 <b>진한 막대</b>만 의미 있는 차이입니다. 위로 멀면 같은 방향, 아래로 멀면 반대 방향으로 움직였다는 뜻입니다.</div>
     </section>
     <section>
-      <div class="sec-head"><h2>🔄 관계가 시기마다 바뀌나?</h2><span class="count">${d.roll}개월 이동 상관</span></div>
-      <div class="legend"><span><i style="background:${COLORS[0]}"></i>같은 달 (동행)</span><span><i style="background:${COLORS[1]}"></i>유가 1개월 앞섬</span></div>
+      <div class="sec-head"><h2>🔄 요즘도 그럴까?</h2><span class="count">최근 3년씩 끊어 본 비율 · ${UN.name} 단위</span></div>
+      <div class="legend"><span><i style="background:${COLORS[0]}"></i>${UN.same}</span><span><i style="background:${COLORS[1]}"></i>유가 ${UN.step(1)} 먼저</span></div>
       <div style="position:relative;height:220px"><canvas id="oroll"></canvas></div>
-      <div class="note">0 위 = 같이 움직임(경기 회복형 유가 상승), 0 아래 = 반대로 움직임(공급 충격형). ${flip ? `<b>최근 3년은 전체 기간과 방향이 반대입니다.</b>` : ''}</div>
+      <div class="note">선이 50% 근처를 오가면 관계가 그때그때 바뀐다는 뜻입니다. 경기가 좋아서 유가가 오를 땐 같이 오르고, 전쟁·감산처럼 공급 문제로 오를 땐 반대로 움직이기 때문입니다.</div>
     </section>
     <section>
-      <div class="sec-head"><h2>✅ 유가가 크게 움직인 뒤 코스피는?</h2><span class="count">브렌트 3개월 변화 기준</span></div>
-      <div class="rt-wrap"><table class="sc rt"><thead><tr><th>직전 유가</th><th class="num">1개월 뒤</th><th class="num">3개월 뒤</th></tr></thead><tbody>
-        ${['base', 'up', 'dn'].map(id => `<tr${id === 'base' ? ' class="base"' : ''}><td style="white-space:normal">${id === 'base' ? '<b>' + esc(C[id].name) + '</b>' : esc(C[id].name)}${id === nowId && id !== 'base' ? ' <span class="jd ok">지금 해당</span>' : ''}${id !== 'base' && C[id].h['3'].n >= 8 ? (C[id].h['3'].avg - b3.avg >= 2 ? ' <span class="jd ok">평소보다 좋음</span>' : C[id].h['3'].avg - b3.avg <= -2 ? ' <span class="jd no">평소보다 나쁨</span>' : ' <span class="jd few">평소와 비슷</span>') : ''}</td>
-          ${cell(C[id].h['1'])}${cell(C[id].h['3'])}</tr>`).join('')}
+      <div class="sec-head"><h2>✅ 유가가 크게 움직인 뒤 3개월</h2><span class="count">브렌트 3개월 ±10% 기준</span></div>
+      <div class="rt-wrap"><table class="sc rt"><thead><tr><th>그때 유가는</th><th class="num">코스피 3개월 뒤</th><th class="num">오른 확률</th></tr></thead><tbody>
+        ${condRow('base', '<b>평소 (아무 때나)</b>')}${condRow('up', '🔺 유가가 3개월에 10% 넘게 오른 뒤')}${condRow('dn', '🔻 유가가 3개월에 10% 넘게 내린 뒤')}
       </tbody></table></div>
-      <div class="note">월말 기준이며, 3개월 뒤 수익은 달마다 겹쳐서 세므로 실제 독립 사례는 표의 횟수보다 적습니다. 평소와 2%p 이상 차이 나야 '좋음/나쁨'으로 표시합니다.</div>
+      <div class="note">평소와 2%p 이상 차이 나야 '좋았음/나빴음'으로 표시합니다. 관찰용이며 매매 규칙에는 쓰지 않습니다.</div>
     </section>`;
+  document.getElementById('ounit').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.oUnit = b.dataset.k; render(); };
   document.getElementById('orng').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.oRange = b.dataset.k; render(); };
   if (!window.Chart) return;
   const tip = { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'), borderColor: css('--line'), borderWidth: 1 };
   const ax = { ticks: { color: css('--muted'), maxTicksLimit: 6 }, grid: { color: css('--grid') } };
+  const fifty = (n, t) => ({ type: 'line', label: '동전 던지기', data: new Array(n).fill(50), borderColor: css('--muted'), borderWidth: 1, borderDash: [4, 4], pointRadius: 0 });
   // ① 가격 차트 (유가를 n개월 뒤로 밀어 겹쳐 보기)
-  const W = d.weekly, nW = OIL_RANGES.find(r => r[0] === state.oRange)[2], st = Math.max(0, W.dates.length - nW);
-  const shifted = (arr, m) => { const w = Math.round(m * 4.345); return W.dates.map((_, i) => i - w >= 0 ? arr[i - w] : null).slice(st); };
+  const W = state.oUnit === 'd' ? d.daily : state.oUnit === 'w' ? d.weekly : oilMonthly(d.weekly);
+  const st = Math.max(0, W.dates.length - OIL_RANGES.find(r => r[0] === state.oRange)[2] * UN.per);
+  const shifted = (arr, m) => { const w = Math.round(m * UN.mo); return W.dates.map((_, i) => i - w >= 0 ? arr[i - w] : null).slice(st); };
   const pc = new Chart(document.getElementById('och'), { type: 'line',
     data: { labels: W.dates.slice(st), datasets: [
       { label: '코스피', data: W.kospi.slice(st), yAxisID: 'y', borderColor: css('--text'), borderWidth: 1.6, pointRadius: 0, tension: 0.1 },
-      { label: '브렌트', data: shifted(W.brent, state.oShift), yAxisID: 'y1', borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0, tension: 0.1 },
+      { label: '브렌트유', data: shifted(W.brent, state.oShift), yAxisID: 'y1', borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0, tension: 0.1 },
       { label: 'WTI', data: shifted(W.wti, state.oShift), yAxisID: 'y1', borderColor: COLORS[3], borderWidth: 1, borderDash: [4, 3], pointRadius: 0, tension: 0.1 }] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.raw != null,
@@ -1305,28 +1342,30 @@ async function renderOil() {
   const sh = document.getElementById('osh');
   sh.oninput = () => { state.oShift = +sh.value; document.getElementById('oshv').textContent = state.oShift ? state.oShift + '개월' : '그대로';
     pc.data.datasets[1].data = shifted(W.brent, state.oShift); pc.data.datasets[2].data = shifted(W.wti, state.oShift); pc.update('none'); };
-  // ② 시차별 상관 막대
-  const ks = d.lags.map(l => l.k), line = (v, t) => ({ type: 'line', data: ks.map(() => v), borderColor: css('--muted'), borderWidth: 1, borderDash: [4, 4], pointRadius: 0, label: t });
+  // ② 시차별 '같은 방향' 비율 (의미 없는 막대는 흐리게)
+  const fade = (c, on) => on ? c : c + '55';
   charts.push(new Chart(document.getElementById('olag'), { type: 'bar',
-    data: { labels: ks.map(k => (k > 0 ? '+' : '') + k), datasets: [
-      { label: '전체', data: d.lags.map(l => l.all), backgroundColor: COLORS[0], borderRadius: 2 },
-      { label: `최근 ${d.recent_months}개월`, data: d.lags.map(l => l.recent), backgroundColor: COLORS[2], borderRadius: 2 },
-      line(thr, '기준'), line(-thr, '기준')] },
+    data: { labels: lags.map(l => UN.short(l.k)), datasets: [
+      { label: `${yrs}년~ 전체`, data: lags.map(l => l.agree), backgroundColor: lags.map(l => fade(COLORS[0], jAll(l) !== 'coin')), borderRadius: 2 },
+      { label: '최근 3년', data: lags.map(l => l.agree_recent), backgroundColor: lags.map(l => fade(COLORS[2], jRec(l) !== 'coin')), borderRadius: 2 },
+      fifty(lags.length)] },
     options: { responsive: true, maintainAspectRatio: false, animation: false,
       plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.datasetIndex < 2,
-        callbacks: { title: it => { const k = ks[it[0].dataIndex]; return k > 0 ? `유가가 ${k}개월 앞섬` : k < 0 ? `코스피가 ${-k}개월 앞섬` : '같은 달'; },
-                     label: it => ` ${it.dataset.label} r ${rs(it.raw)}` } } },
-      scales: { x: { ...ax, grid: { display: false } }, y: { ...ax, suggestedMin: -0.5, suggestedMax: 0.5 } } } }));
-  // ③ 이동 상관
-  const M = d.monthly;
+        callbacks: { title: it => { const k = lags[it[0].dataIndex].k; return k ? `유가가 ${UN.step(k)} 먼저` : UN.same; },
+                     label: it => { const l = lags[it.dataIndex], j = it.datasetIndex ? jRec(l) : jAll(l), n = it.datasetIndex ? l.agree_n_recent : l.agree_n;
+                       return ` ${it.dataset.label}: ${it.raw}% 같은 방향 (${n.toLocaleString()}번) → ${CHIP[j][1]}`; } } } },
+      scales: { x: { ...ax, grid: { display: false }, ticks: { ...ax.ticks, autoSkip: false, maxRotation: 0, font: { size: 11 } } }, y: { ...ax, min: 20, max: 80, ticks: { ...ax.ticks, callback: v => v + '%' } } } } }));
+  // ③ 최근 36개월씩 끊어 본 '같은 방향' 비율
+  const M = { dates: U.roll_dates }, RA = U.roll;
   charts.push(new Chart(document.getElementById('oroll'), { type: 'line',
     data: { labels: M.dates, datasets: [
-      { label: '동행', data: M.roll['0'], borderColor: COLORS[0], borderWidth: 1.6, pointRadius: 0, spanGaps: false },
-      { label: '유가 1개월 앞섬', data: M.roll['1'], borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0 },
-      { label: '0', data: M.dates.map(() => 0), borderColor: css('--muted'), borderWidth: 1, pointRadius: 0 }] },
+      { label: UN.same, data: RA['0'], borderColor: COLORS[0], borderWidth: 1.6, pointRadius: 0 },
+      { label: `유가 ${UN.step(1)} 먼저`, data: RA['1'], borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0 },
+      fifty(M.dates.length)] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.datasetIndex < 2 && it.raw != null, callbacks: { label: it => ` ${it.dataset.label} r ${rs(it.raw)}` } } },
-      scales: { x: { ...ax, ticks: { ...ax.ticks, maxRotation: 0, callback: (v, i) => M.dates[i].slice(0, 4) } }, y: { ...ax, min: -1, max: 1 } } } }));
+      plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.datasetIndex < 2 && it.raw != null, callbacks: { label: it => ` ${it.dataset.label} ${it.raw}%` } } },
+      scales: { x: { ...ax, ticks: { ...ax.ticks, maxRotation: 0, callback: (v, i) => M.dates[i].slice(0, 4) } },
+                y: { ...ax, min: 20, max: 80, ticks: { ...ax.ticks, callback: v => v + '%' } } } } }));
 }
 
 // 최신 VIX (어젯밤 미국 종가)와 최근 10거래일 최고값 — us_trend.json에서 바로 읽음

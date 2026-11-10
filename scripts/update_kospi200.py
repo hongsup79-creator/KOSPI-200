@@ -1539,14 +1539,19 @@ def build_gauge(demo, updated):
 # ---------------------------------------------------------------- 🛢️ 유가 vs 코스피 (관찰용)
 # "유가는 코스피를 선행한다"는 주장을 데이터로 직접 확인하는 탭. 기존 규칙·등급에는 쓰지 않음.
 OIL_TICKERS = {"brent": "BZ=F", "wti": "CL=F"}   # 통계는 브렌트(두바이유와 비슷하게 움직이고, WTI는 2020.4 마이너스 가격 왜곡)
-OIL_LAGS = range(-6, 7)        # +k = 유가가 k개월 앞섬, −k = 코스피가 k개월 앞섬
-OIL_RECENT = 36                # 최근 구간(개월)
-OIL_ROLL = 36                  # 이동 상관 창(개월)
+# 단위별 시차(+k = 유가가 k단위 먼저)와 '최근' 구간(약 3년, 이동 비율 창도 같은 길이)
+OIL_UNITS = {
+    "d": {"lags": [0, 1, 2, 3, 5, 10, 20], "recent": 750, "roll_lags": [0, 1]},
+    "w": {"lags": [0, 1, 2, 3, 4, 6, 8, 12], "recent": 156, "roll_lags": [0, 1]},
+    "m": {"lags": [0, 1, 2, 3, 4, 5, 6], "recent": 36, "roll_lags": [0, 1]},
+}
 
 
-def _corr(a, b):
-    m = a.notna() & b.notna()
-    return (_r(a[m].corr(b[m]), 2), int(m.sum())) if m.sum() >= 12 else (None, int(m.sum()))
+def _same_dir(a, b):
+    """두 수익률이 같은 방향이면 1, 반대면 0, 한쪽이 없거나 0이면 NaN"""
+    sa, sb = np.sign(a), np.sign(b)
+    ok = a.notna() & b.notna() & (sa != 0) & (sb != 0)
+    return (sa == sb).astype(float).where(ok)
 
 
 def build_oil(demo, updated):
@@ -1572,20 +1577,32 @@ def build_oil(demo, updated):
     start = max(kospi.index[0], br.index[0])
     kospi, oil = kospi[kospi.index >= start], {k: v[v.index >= start] for k, v in oil.items()}
 
-    # 월말 종가 → 월간 수익률
+    # 월말 종가 (조건부 성적용)
     km = kospi.resample("ME").last()
     om = oil["brent"].resample("ME").last().reindex(km.index)
-    kr, orr = km.pct_change() * 100, om.pct_change() * 100
-    recent = kr.index[-OIL_RECENT:]
-    lags = []
-    for k in OIL_LAGS:
-        a, n = _corr(orr.shift(k), kr)
-        b, nb = _corr(orr.shift(k).loc[recent], kr.loc[recent])
-        lags.append({"k": k, "all": a, "n": n, "recent": b, "n_recent": nb})
 
-    # 이동 상관: 동행(0) vs 1개월 선행(+1)
-    roll = {str(k): [_r(x, 2) for x in orr.shift(k).rolling(OIL_ROLL, min_periods=OIL_ROLL).corr(kr)]
-            for k in (0, 1)}
+    # 단위별(일·주·월) '같은 방향' 비율. 일 단위는 한국 장 마감 전 마지막 미국 종가(전날 밤 유가)에 맞춤
+    br_d = _vix_on(kospi.index, oil["brent"])
+    series = {"d": (kospi, br_d),
+              "w": (kospi.resample("W-FRI").last(), br_d.resample("W-FRI").last()),
+              "m": (km, br_d.resample("ME").last())}
+    units = {}
+    for u_, (kp, op) in series.items():
+        kp, op = kp.dropna(), op.reindex(kp.dropna().index)
+        kr, orr = kp.pct_change(), op.pct_change()
+        rec_n, roll_n = OIL_UNITS[u_]["recent"], OIL_UNITS[u_]["recent"]
+        recent = kr.index[-rec_n:]
+        rows = []
+        for k in OIL_UNITS[u_]["lags"]:
+            same = _same_dir(orr.shift(k), kr)
+            sr = same.loc[recent].dropna()
+            rows.append({"k": k, "agree": _r(same.mean() * 100, 1), "agree_n": int(same.notna().sum()),
+                         "agree_recent": _r(sr.mean() * 100, 1) if len(sr) else None, "agree_n_recent": int(len(sr))})
+        roll_idx = kr.index if u_ != "d" else kr.index[::5]          # 일 단위 이동 비율은 5일마다만 저장(용량)
+        roll = {str(k): [_r(x * 100, 0) for x in _same_dir(orr.shift(k), kr)
+                         .rolling(roll_n, min_periods=roll_n // 2).mean().reindex(roll_idx)]
+                for k in OIL_UNITS[u_]["roll_lags"]}
+        units[u_] = {"lags": rows, "recent": rec_n, "roll_dates": [d.strftime("%Y-%m-%d") for d in roll_idx], "roll": roll}
 
     # 조건부 성적: 직전 3개월 유가가 올랐을 때/내렸을 때, 그다음 1·3개월 코스피
     o3 = om.pct_change(3) * 100
@@ -1603,19 +1620,20 @@ def build_oil(demo, updated):
 
     wk = pd.DataFrame({"kospi": kospi, **oil}).resample("W-FRI").last().dropna(subset=["kospi"]).ffill()
     out = {"updated": updated, "demo": demo, "from": start.strftime("%Y-%m-%d"),
-           "to": kospi.index[-1].strftime("%Y-%m-%d"), "recent_months": OIL_RECENT, "roll": OIL_ROLL,
+           "to": kospi.index[-1].strftime("%Y-%m-%d"),
            "now": {"brent": _r(oil["brent"].iloc[-1], 2), "wti": _r(oil["wti"].iloc[-1], 2),
                    "oil_date": oil["brent"].index[-1].strftime("%Y-%m-%d"),
-                   "brent_3m": _r(o3.iloc[-1], 1), "kospi": _r(kospi.iloc[-1], 2)},
-           "lags": lags, "cond": cond,
-           "monthly": {"dates": [d.strftime("%Y-%m") for d in km.index], "roll": roll},
+                   "brent_3m": _r(o3.iloc[-1], 1), "kospi": _r(kospi.iloc[-1], 2),
+                   "brent_1m": _r((oil["brent"].iloc[-1] / oil["brent"].iloc[-22] - 1) * 100, 1)},
+           "units": units, "cond": cond,
+           "daily": {"dates": [d.strftime("%Y-%m-%d") for d in kospi.index], "kospi": [_r(x, 2) for x in kospi],
+                     "brent": [_r(x, 2) for x in br_d], "wti": [_r(x, 2) for x in _vix_on(kospi.index, oil["wti"])]},
            "weekly": {"dates": [d.strftime("%Y-%m-%d") for d in wk.index],
                       **{c: [_r(x, 2) for x in wk[c]] for c in wk.columns}}}
     DATA.mkdir(exist_ok=True)
     (DATA / "oil.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    best = max((l for l in lags if l["k"] > 0 and l["all"] is not None), key=lambda l: abs(l["all"]), default=None)
-    print(f"  유가 {out['from']}~{out['to']} ({len(km)}개월), 동행 r={lags[6]['all']}, "
-          f"최대 선행 {best and best['k']}개월 r={best and best['all']}")
+    print(f"  유가 {out['from']}~{out['to']} ({len(km)}개월), 같은 방향 비율 "
+          + ", ".join(f"{u_}{units[u_]['lags'][1]['k']}={units[u_]['lags'][1]['agree']}%" for u_ in units))
 
 
 # ---------------------------------------------------------------- 텔레그램 알림
