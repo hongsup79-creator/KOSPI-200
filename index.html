@@ -251,6 +251,8 @@ if (window.Chart) {
     return { borderColor: col, backgroundColor: col, borderWidth: 0, borderRadius: 2 };
   };
   Chart.defaults.plugins.tooltip.boxPadding = 4;
+  // 말풍선 항목을 '값이 큰 것부터' 정렬 → 차트에서 위에 있는 선이 말풍선에서도 위에 옴 (정배열이면 종가·5·10·20·60·120 순)
+  Chart.defaults.plugins.tooltip.itemSort = (a, b) => (typeof b.raw === 'number' ? b.raw : -Infinity) - (typeof a.raw === 'number' ? a.raw : -Infinity);
 }
 const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
@@ -1028,6 +1030,9 @@ async function openChart(ixId, code) {
       plugins: { legend: { display: false }, tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'),
         borderColor: css('--line'), borderWidth: 1,
         filter: it => it.raw != null && !(it.datasetIndex >= 3 && it.raw == null),
+        // 종목 차트는 순서를 고정: 종가 → 5 → 10 → 20 → 60 → 120일선 → 신호 표시 (숫자가 차례로 작아지면 정배열)
+        itemSort: (a, b) => { const R = ['종가', '5일선', '10일선', '20일선', '60일선', '120일선'];
+          const r = x => { const k = R.indexOf(x.dataset.label); return k < 0 ? 99 : k; }; return r(a) - r(b); },
         callbacks: { label: it => {
           const i = it.dataIndex + P;
           if (it.datasetIndex === 0) return ` 종가 ${fmtP(it.raw)}`;
