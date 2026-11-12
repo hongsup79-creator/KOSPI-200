@@ -148,7 +148,7 @@
   .modal .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .modal .top h2 { margin: 0; font-size: 20px; }
   .modal .x { margin-left: auto; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
-  .stock-chart { position: relative; height: 280px; margin: 10px 0 6px; }
+  .stock-chart { position: relative; height: 300px; margin: 10px 0 6px; }
   .mk { table-layout: fixed; }
   .mk td { padding: 7px 4px; font-size: 13px; }
   .mk .chip { white-space: normal; }
@@ -1004,16 +1004,16 @@ async function openChart(ixId, code) {
     pointRadius: 7, pointHoverRadius: 9, borderColor: color, backgroundColor: fill ? color : 'transparent', borderWidth: 2, order: 0 });
   chart = new Chart(box.querySelector('#sc'), { type: 'line',
     data: { labels, datasets: [
-      { label: '종가', data: sl(c), borderColor: css('--text'), backgroundColor: css('--text'), borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 3, tension: 0.1, order: 2, spanGaps: true },
-      { label: '20일선', data: sl(m20), borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
-      { label: '60일선', data: sl(m60), borderColor: COLORS[3], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      { label: '종가', data: sl(c), borderColor: css('--text'), backgroundColor: css('--text'), borderWidth: 2.6, pointRadius: 0, pointHoverRadius: 4, tension: 0.1, order: 2, spanGaps: true },
+      { label: '20일선', data: sl(m20), borderColor: COLORS[1], borderWidth: 2.2, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      { label: '60일선', data: sl(m60), borderColor: COLORS[3], borderWidth: 2.2, pointRadius: 0, pointHoverRadius: 0, order: 3 },
       mk('▲ 상승 초입', pts(true, 'AB'), upC, 'triangle', 0, true),
       mk('△ 등급 미달', pts(true, 'C'), mut, 'triangle', 0, false),
       mk('▼ 하락 경고', pts(false, 'down'), dnC, 'triangle', 180, true),
       mk('▽ 눌림', pts(false, 'pull'), css('--notice-text'), 'triangle', 180, false),
-      { label: '120일선', data: sl(m120), borderColor: COLORS[6], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
-      { label: '5일선', data: sl(m5), borderColor: COLORS[0], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
-      { label: '10일선', data: sl(m10), borderColor: COLORS[2], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
+      { label: '120일선', data: sl(m120), borderColor: COLORS[6], borderWidth: 2.2, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      { label: '5일선', data: sl(m5), borderColor: COLORS[0], borderWidth: 1.8, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
+      { label: '10일선', data: sl(m10), borderColor: COLORS[2], borderWidth: 1.8, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'),
