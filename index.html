@@ -243,6 +243,15 @@
 </main>
 
 <script>
+// 차트 말풍선의 색 네모를 선 색으로 꽉 채움 (흰 바탕 + 테두리만 있으면 구분이 어려움)
+if (window.Chart) {
+  Chart.defaults.plugins.tooltip.callbacks.labelColor = ctx => {
+    const c = ctx.dataset.borderColor || ctx.dataset.backgroundColor;
+    const col = Array.isArray(c) ? c[ctx.dataIndex] : c;
+    return { borderColor: col, backgroundColor: col, borderWidth: 0, borderRadius: 2 };
+  };
+  Chart.defaults.plugins.tooltip.boxPadding = 4;
+}
 const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
