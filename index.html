@@ -8,52 +8,37 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
   :root {
-    --bg: #eceff3; --panel: #ffffff; --sunk: #f3f5f8; --line: #d8dee6; --text: #182030;
-    --muted: #465064; --accent: #182030; --accent-text: #ffffff; --green: #0e7a52; --green-bg: #e1f3ea;
-    --red: #d1242f; --notice-bg: #fcefd2; --notice-text: #8a5300; --group-bg: #f3f5f8;
-    --tab-on: #e6eaf0; --heat: 14,122,82; --up: #d1242f; --dn: #1d5bd6; --wr: #5b46d1; --bot: #0e7a52; --top: #b45f00;
-    --grid: rgba(24,32,48,0.07); --tip-bg: #ffffff;
-    --cold-bg: #e8effc; --hot-bg: #fcf1e1;
+    --bg: #f4f6f9; --panel: #ffffff; --line: #e2e6ec; --text: #1b1f24;
+    --muted: #6b7280; --accent: #2f6fec; --accent-text: #ffffff; --green: #0b8a55; --green-bg: #e2f5ea;
+    --red: #d6363b; --notice-bg: #fff4d6; --notice-text: #8a5a00; --group-bg: #f1f4f9;
+    --tab-on: #eaf1ff; --heat: 11,138,85; --up: #d6363b; --dn: #2f6fec; --wr: #6250d6; --bot: #0b8a55; --top: #c26a00;
+    --grid: rgba(0,0,0,0.07); --tip-bg: #ffffff;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   :root[data-theme="dark"] {
-    --bg: #0d1117; --panel: #151a22; --sunk: #1b212b; --line: #2a323e; --text: #e7ebf1;
-    --muted: #b0b9c7; --accent: #e7ebf1; --accent-text: #0d1117; --green: #3ecf8e; --green-bg: #173326;
-    --red: #ff6b6b; --notice-bg: #3a2c12; --notice-text: #f2c063; --group-bg: #1b212b;
-    --tab-on: #232b37; --heat: 62,207,142; --up: #ff6b6b; --dn: #6aa1ff; --wr: #9a8cf0; --bot: #3ecf8e; --top: #f0a020;
-    --grid: rgba(255,255,255,0.06); --tip-bg: #0d1117;
-    --cold-bg: #16223a; --hot-bg: #33260f;
+    --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e8eaed;
+    --muted: #8b919c; --accent: #4f8cff; --green: #3ecf8e; --green-bg: #1e3a2c;
+    --red: #ff7a7a; --notice-bg: #3a2d12; --notice-text: #f5c66b; --group-bg: #15181d;
+    --tab-on: #1d2533; --heat: 62,207,142; --up: #ff6b6b; --dn: #5b9dff; --wr: #9085e9; --bot: #3ecf8e; --top: #f0a020;
+    --grid: rgba(255,255,255,0.06); --tip-bg: #0b0c0f;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5;
-         font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; word-break: keep-all; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
-  header { background: var(--panel); border-bottom: 1px solid var(--line); }
-  header .wrap { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 12px; padding-top: 18px; padding-bottom: 14px; }
-  .mark { width: 34px; height: 34px; grid-row: span 2; color: var(--text); }
-  .mark .sweep { transform-origin: 17px 17px; animation: sweep 6s linear infinite; }
-  @keyframes sweep { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .mark .sweep { animation: none; } }
-  h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.15; }
-  .tagline { grid-column: 2 / 4; color: var(--muted); font-size: 13px; margin: 0; }
-  #theme { grid-row: 1; grid-column: 3; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; }
-  #theme:hover { color: var(--text); border-color: var(--text); }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  header { padding: 24px 16px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: relative; }
+  #theme { position: absolute; top: 18px; right: 16px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  header h1, header .sub { padding-right: 96px; }
+  h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+  .tagline { color: var(--text); font-size: 14px; margin: -2px 0 8px; padding-right: 96px; }
   .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
-  header .sub { grid-column: 1 / 4; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-  header .sub b, header .sub strong { color: var(--text); }
-  main { max-width: 980px; margin: 0 auto; padding: 0 16px 48px; }
-  .tabs { position: sticky; top: 0; z-index: 20; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
-          margin: 0 0 18px; padding: 0; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: -16px 0 0 var(--bg), 16px 0 0 var(--bg); }
-  .views + .controls, .views + * { margin-top: 10px; }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tabs button { flex: 0 0 auto; background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent;
-                 padding: 14px 12px 12px; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; margin-bottom: -1px; }
-  .tabs button:hover { color: var(--text); }
-  .tabs button.on { color: var(--text); border-bottom-color: var(--text); font-weight: 700; }
-  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 3px; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 0 0 auto; background: var(--panel); color: var(--muted); border: 1px solid var(--line);
+                 border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+  .tabs button.on { color: var(--text); border-color: var(--accent); background: var(--tab-on); font-weight: 600; }
   .notice { background: var(--notice-bg); color: var(--notice-text); border-radius: 10px; padding: 10px 14px;
             font-size: 13px; margin-bottom: 14px; }
-  .controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  .controls { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
               padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .controls label { color: var(--muted); font-size: 14px; }
   select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
@@ -63,11 +48,10 @@
                 border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
   .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
   .note { width: 100%; color: var(--muted); font-size: 12px; }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-            padding: 18px 20px; margin-top: 14px; }
-  @media (max-width: 520px) { section { padding: 16px 14px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+            padding: 16px; margin-top: 16px; }
   .sec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .sec-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+  .sec-head h2 { margin: 0; font-size: 20px; }
   .rule { font-family: var(--mono); color: var(--muted); font-size: 13px; }
   .count { margin-left: auto; color: var(--muted); font-size: 13px; }
   .changes { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
@@ -81,12 +65,12 @@
   td { padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  a.name { color: var(--text); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--line); }
-  a.name:hover { border-bottom-color: var(--text); }
+  a.name { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  a.name:hover { color: var(--accent); }
   .badge { display: inline-block; margin-left: 6px; background: var(--green-bg); color: var(--green);
-           font-size: 12px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; }
+           font-size: 11px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; }
   .sector { color: var(--muted); }
-  .group td { background: var(--group-bg); color: var(--text); font-weight: 700; font-size: 13px; }
+  .group td { background: var(--group-bg); color: var(--accent); font-weight: 600; font-size: 13px; }
   .empty { color: var(--muted); padding: 24px 0; text-align: center; line-height: 1.6; }
   .heat { overflow-x: auto; }
   .heat table { font-size: 13px; }
@@ -100,15 +84,6 @@
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 4px; }
   .legend i, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .ret-up { color: var(--up); } .ret-dn { color: var(--dn); }
-  .shift { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 14px; color: var(--muted); }
-  .shift input { flex: 1; accent-color: var(--text); }
-  .shift b { color: var(--text); min-width: 64px; font-variant-numeric: tabular-nums; }
-  .verdict { background: var(--sunk); border-left: 4px solid var(--line); border-radius: 4px 6px 6px 4px; padding: 10px 12px; margin: 6px 0 10px; font-size: 14px; line-height: 1.6; }
-  .verdict.ok { border-left-color: var(--green); } .verdict.no { border-left-color: var(--top); }
-  .otiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 4px 0 8px; }
-  .otile { background: var(--sunk); border-radius: 8px; padding: 10px 12px; }
-  .otl { font-size: 13px; color: var(--muted); }
-  .obig { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; margin: 2px 0 4px; }
   .rt td, .rt th { padding: 8px 4px; font-size: 13px; }
   .rt { margin-top: 8px; }
   .rt td:first-child { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
@@ -120,7 +95,7 @@
   .score.hi { background: var(--green-bg); color: var(--green); font-weight: 700; }
   .score.mid { color: var(--text); } .score.lo { color: var(--muted); }
   .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-  .tile { background: var(--sunk); border-radius: 6px; padding: 10px 12px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
   .tile .k { color: var(--muted); font-size: 12px; }
   .tile .v { font-size: 22px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .tile .d { font-size: 12px; margin-top: 2px; }
@@ -133,10 +108,10 @@
   .sc td, .sc th { padding: 7px 4px; font-size: 13px; }
   .sc td:first-child { white-space: nowrap; }
   .sc tr.base { opacity: .8; }
-  .sc tr.yrs td { padding-top: 0; font-size: 12px; color: var(--muted); white-space: normal; border-bottom: 1px solid var(--line); }
+  .sc tr.yrs td { padding-top: 0; font-size: 11px; color: var(--muted); white-space: normal; border-bottom: 1px solid var(--line); }
   .sc tr.yrs + tr td, .sc tr:has(+ tr.yrs) td { border-bottom: none; }
   .yr { display: inline-block; margin-right: 8px; white-space: nowrap; }
-  .chip { display: inline-block; font-size: 12px; padding: 1px 6px; border-radius: 5px; margin: 2px 4px 0 0;
+  .chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 5px; margin: 2px 4px 0 0;
           border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .chip.on { border-color: var(--accent); color: var(--accent); background: var(--tab-on); }
   .chip.w { border-color: var(--notice-text); color: var(--notice-text); background: var(--notice-bg); }
@@ -151,14 +126,11 @@
   .alert.danger { background: rgba(214,54,59,0.10); border-color: var(--red); }
   .alert.warn { background: var(--notice-bg); border-color: var(--notice-text); color: var(--notice-text); }
   .alert.good { background: var(--green-bg); border-color: var(--green); }
-  .views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 4px; background: var(--panel);
-           border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .views button { background: none; border: 0; border-left: 1px solid var(--line); padding: 12px 6px 11px;
-                  font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; box-shadow: inset 0 -3px 0 transparent; }
-  .views button:first-child { border-left: 0; }
-  .views button b { display: block; font-size: 22px; font-weight: 800; color: var(--text); margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .views button:hover { background: var(--sunk); }
-  .views button.on { background: var(--sunk); color: var(--text); font-weight: 700; box-shadow: inset 0 -3px 0 var(--text); }
+  .views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 16px; }
+  .views button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px;
+                  font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .views button b { display: block; font-size: 20px; color: var(--text); margin-top: 2px; }
+  .views button.on { border-color: var(--accent); background: var(--tab-on); color: var(--text); font-weight: 600; }
   .defs { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
   .defs b { color: var(--text); }
   .sub-h { font-size: 14px; font-weight: 700; margin: 16px 0 4px; }
@@ -171,8 +143,8 @@
   .chip.C { color: var(--muted); }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
   .modal .box { background: var(--panel); color: var(--text); width: 100%; max-width: 760px; max-height: 92vh; overflow-y: auto;
-                border-radius: 12px 12px 0 0; padding: 18px 20px; }
-  @media (min-width: 700px) { .modal { align-items: center; } .modal .box { border-radius: 10px; } }
+                border-radius: 16px 16px 0 0; padding: 16px; }
+  @media (min-width: 700px) { .modal { align-items: center; } .modal .box { border-radius: 16px; } }
   .modal .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .modal .top h2 { margin: 0; font-size: 20px; }
   .modal .x { margin-left: auto; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
@@ -183,11 +155,11 @@
   .mk th:first-child, .mk td:first-child { width: 72px; padding-right: 8px; } .mk th:last-child, .mk td:last-child { width: 80px; }
   .tri-up { color: var(--up); font-weight: 700; } .tri-dn { color: var(--dn); font-weight: 700; }
   .tri-off { color: var(--muted); }
-  .sb { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 700; padding: 1px 5px; border-radius: 5px; white-space: nowrap; }
+  .sb { display: inline-block; margin-left: 5px; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 5px; white-space: nowrap; }
   .sb.up { color: #fff; background: var(--up); } .sb.dn { color: #fff; background: var(--dn); }
   .sb.pull { color: var(--notice-text); background: var(--notice-bg); } .sb.off { color: var(--muted); border: 1px solid var(--line); } .tri-pull { color: var(--notice-text); font-weight: 700; }
   .fwd-list td { font-size: 12px; padding: 6px 3px; }
-  @media (max-width: 520px) { .views { grid-template-columns: repeat(2, 1fr); } .views button { font-size: 12px; padding: 9px 2px; border-top: 1px solid var(--line); } .views button:nth-child(-n+2) { border-top: 0; } .views button:nth-child(odd) { border-left: 0; } }
+  @media (max-width: 520px) { .views { grid-template-columns: repeat(2, 1fr); } .views button { font-size: 12px; padding: 8px 2px; } }
   .badge.val { background: var(--tab-on); color: var(--accent); }
   .badge.wr { background: var(--wr); color: #fff; font-weight: 700; }
   .wrc { display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end; }
@@ -206,29 +178,26 @@
   .hold-form button { padding: 7px 12px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .hold-form button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .hold-hint { margin: 0 0 10px; }
+  .ma-btn { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
+  .ma-more i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin: 0 3px 2px 6px; vertical-align: middle; }
   details.ex { margin: 6px 0; } details.ex > summary { font-size: 12px; color: var(--muted); cursor: pointer; list-style: none; display: inline-block; }
   details.ex > summary::-webkit-details-marker { display: none; } details.ex[open] > summary { margin-bottom: 4px; }
   .one { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
-  .hero { border: 0; border-left: 6px solid var(--muted); border-radius: 4px 8px 8px 4px; background: var(--sunk); padding: 22px 24px; }
-  .hero .hh { font-size: clamp(24px, 4.2vw, 32px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.2; margin-bottom: 10px; }
-  .hero .ha { font-size: 16px; line-height: 1.65; max-width: 62ch; }
-  .hero.cold { border-left-color: var(--dn); background: var(--cold-bg); } .hero.cold .hh { color: var(--dn); }
-  .hero.good { border-left-color: var(--bot); background: var(--green-bg); } .hero.good .hh { color: var(--green); }
-  .hero.hot { border-left-color: var(--top); background: var(--hot-bg); } .hero.hot .hh { color: var(--top); }
-  .hero .hw { border-top: 1px solid var(--grid); margin-top: 14px; padding-top: 12px; list-style: none; padding-left: 0; font-variant-numeric: tabular-nums; } .hw { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: var(--muted); } .hw b { color: var(--text); }
+  .hero { border-width: 2px; } .hero .hh { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .hero .ha { font-size: 15px; line-height: 1.6; } .hero.cold { border-color: var(--dn); } .hero.good { border-color: var(--bot); background: var(--green-bg); }
+  .hero.hot { border-color: var(--top); } .hw { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: var(--muted); } .hw b { color: var(--text); }
   .hgo { margin-top: 10px; } .hgo button, .lnk { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
   .hgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } .hgrid.two { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 520px) { .hgrid { grid-template-columns: repeat(2, 1fr); } }
-  .htile { background: var(--sunk); border-radius: 6px; padding: 10px 12px; font-variant-numeric: tabular-nums; } .htile .hv { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; margin: 2px 0; }
-  .hsig { background: var(--sunk); border-radius: 6px; padding: 10px 14px; margin-top: 8px; cursor: pointer; line-height: 1.8; font-size: 14px; }
-  .hsig:hover { box-shadow: inset 0 0 0 1px var(--line); }
+  .htile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; } .htile .hv { font-size: 19px; font-weight: 800; margin: 2px 0; }
+  .hsig { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; line-height: 1.8; font-size: 14px; }
   .hsteps { margin: 0; padding-left: 20px; line-height: 1.9; font-size: 14px; }
-  .confirm { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; cursor: pointer; font-size: 14px; }
+  .confirm { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; cursor: pointer; font-size: 14px; }
   .confirm.on { border: 2px solid var(--green); background: var(--green-bg); }
   .confirm .cf { display: inline-block; margin: 4px 6px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
   .confirm .cfn { margin-top: 5px; font-size: 13px; color: var(--muted); line-height: 1.55; }
   .confirm.on .cfn { color: var(--text); }
-  .gsec { background: var(--sunk); border: 0; border-left: 4px solid; border-radius: 4px 6px 6px 4px; padding: 8px 12px; margin: 8px 0; }
+  .gsec { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
   .gsec.bot { border-left-color: var(--grid); } .gsec.bot2 { border-left-color: var(--bot); } .gsec.top { border-left-color: var(--top); }
   .gsec .gh { font-weight: 800; font-size: 15px; margin-bottom: 4px; }
   .gstep { display: flex; gap: 8px; padding: 6px 2px; border-top: 1px dashed var(--line); }
@@ -237,12 +206,12 @@
   .gsec.top .gstep.on .gck { color: var(--top); }
   .gtl { font-weight: 600; font-size: 14px; } .gnow { font-size: 13px; color: var(--muted); margin-top: 2px; }
   .gstep.on .gtl { font-weight: 800; }
-  .jd { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
+  .jd { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
   .jd.ok { background: var(--green-bg); color: var(--green); } .jd.no { background: var(--grid); color: var(--muted); } .jd.few { background: var(--grid); color: var(--muted); }
   .gok { color: var(--bot); }
   .gcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   @media (max-width: 700px) { .gcards { grid-template-columns: repeat(2, 1fr); } }
-  .gcard { background: var(--sunk); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
+  .gcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
   .gcard .gt { font-size: 13px; color: var(--muted); font-weight: 600; } .gcard .gv { font-size: 24px; font-weight: 800; }
   .gz { align-self: flex-start; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
   .gz.lo { background: var(--up); color: #fff; } .gz.hi { background: var(--dn); color: #fff; } .gz.mid { background: var(--grid); color: var(--text); }
@@ -250,77 +219,21 @@
   .sc td:first-child { min-width: 108px; }
   .notice a { color: inherit; font-weight: 700; }
   @media (max-width: 520px) { .sector-col { display: none; } .sc .h5 { display: none; } .sc td, .sc th { font-size: 12px; padding: 6px 3px; } .rt .y1 { display: none; } .rt td, .rt th { font-size: 12px; padding: 7px 3px; } h1 { font-size: 22px; } }
-  /* ---------- 오늘 요약: 시세 띠 · 계기판 · 신호판 */
-  .ticker { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px 0;
-            border-bottom: 1px solid var(--line); padding-bottom: 12px; font-variant-numeric: tabular-nums; }
-  .ticker::-webkit-scrollbar { display: none; }
-  .ticker li { display: flex; flex-direction: column; padding: 0 14px; border-left: 1px solid var(--line); font-size: 14px; white-space: nowrap; }
-  .ticker li:first-child { padding-left: 0; border-left: 0; }
-  .ticker .tn { color: var(--muted); font-size: 13px; } .ticker .tv { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
-  .ticker .tdate { grid-column: 1 / -1; border-left: 0; padding: 0; color: var(--muted); font-size: 12px; text-align: right; }
-  .cockpit { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); padding: 0; overflow: hidden; }
-  .verdict { padding: 26px 26px 22px; background: var(--sunk); border-right: 1px solid var(--line); }
-  .cockpit.cold .verdict { background: var(--cold-bg); } .cockpit.good .verdict { background: var(--green-bg); } .cockpit.hot .verdict { background: var(--hot-bg); }
-  .verdict .hh { font-size: clamp(28px, 4.4vw, 40px); font-weight: 800; letter-spacing: -0.045em; line-height: 1.15; margin-bottom: 14px; }
-  .cockpit.cold .hh { color: var(--dn); } .cockpit.good .hh { color: var(--green); } .cockpit.hot .hh { color: var(--top); }
-  .verdict .ha { font-size: 16px; line-height: 1.7; max-width: 34em; }
-  .lamph { margin: 22px 0 8px; font-size: 13px; color: var(--muted); }
-  .lamps { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; }
-  .lamp { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
-  .lamp i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); flex: 0 0 auto; }
-  .lamp span { margin-left: auto; font-weight: 500; font-size: 13px; color: var(--muted); }
-  .lamp.on i { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 4px var(--green-bg); } .lamp.on span { color: var(--green); font-weight: 700; }
-  .lamp.weak i { background: linear-gradient(90deg, var(--muted) 50%, transparent 50%); }
-  .gauges { padding: 22px 24px; display: grid; gap: 18px; align-content: center; }
-  .ggh { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
-  .ggh strong { font-size: 20px; color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .ggt { position: relative; height: 10px; margin: 8px 0 24px; background: var(--grid); border-radius: 2px; }
-  .ggt > i { position: absolute; top: 0; bottom: 0; }
-  .gz-cold { background: color-mix(in srgb, var(--dn) 28%, transparent); } .gz-hot { background: color-mix(in srgb, var(--top) 30%, transparent); }
-  .gm { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
-  .gm span { position: absolute; top: 17px; transform: translateX(-50%); font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-  .ggt u { position: absolute; top: -5px; width: 4px; height: 20px; margin-left: -2px; background: var(--text); border-radius: 2px; box-shadow: 0 0 0 2px var(--panel); }
-  .ghost { position: absolute; top: -2px; width: 0; height: 14px; border-left: 2px dotted var(--text); opacity: .4; }
-  .ggn { font-size: 14px; font-weight: 500; color: var(--text); }
-  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin-top: 10px; }
-  .sigh { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  .sigh b { font-size: 15px; }
-  .sigr { display: grid; grid-template-columns: 84px 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--grid); font-size: 13px; align-items: start; }
-  .sigr:last-child { border-bottom: 0; } .sigr > span { padding-top: 4px; white-space: nowrap; }
-  .sn { font: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--sunk); border: 1px solid transparent; border-radius: 4px;
-        padding: 3px 9px; margin: 0 4px 4px 0; cursor: pointer; }
-  .sn:hover { border-color: var(--text); }
-  .sn.up { box-shadow: inset 3px 0 0 var(--up); } .sn.dn { box-shadow: inset 3px 0 0 var(--dn); } .sn.pull { box-shadow: inset 3px 0 0 var(--notice-text); }
-  .sn small { margin-left: 5px; font-size: 12px; color: var(--up); font-weight: 800; }
-  .none { color: var(--muted); display: inline-block; padding-top: 4px; }
-  @media (max-width: 760px) {
-    .cockpit { grid-template-columns: 1fr; } .verdict { border-right: 0; border-bottom: 1px solid var(--line); padding: 22px 18px 18px; }
-    .gauges { padding: 20px 18px; } .sigs { grid-template-columns: 1fr; gap: 18px; }
-    .ticker { grid-template-columns: repeat(3, 1fr); gap: 10px 0; }
-    .ticker li { padding: 0 10px; border-left: 1px solid var(--line); }
-    .ticker li:nth-child(3n+1) { padding-left: 0; border-left: 0; } .ticker .tdate { text-align: left; }
-  }
 </style>
 </head>
 <body>
-<header><div class="wrap">
-  <svg class="mark" viewBox="0 0 34 34" aria-hidden="true" fill="none" stroke="currentColor">
-    <circle cx="17" cy="17" r="15.5" stroke-width="1.5"/><circle cx="17" cy="17" r="10" stroke-width="1" opacity=".45"/><circle cx="17" cy="17" r="4.5" stroke-width="1" opacity=".45"/>
-    <g class="sweep"><path d="M17 17 L17 1.5 A15.5 15.5 0 0 1 28 6 Z" fill="currentColor" stroke="none" opacity=".18"/><line x1="17" y1="17" x2="17" y2="1.5" stroke-width="1.5"/></g>
-    <circle cx="23.5" cy="11" r="1.8" fill="var(--up)" stroke="none"/>
-  </svg>
-  <h1>Stock Trend Radar</h1>
+<header>
   <button id="theme" type="button">어두운 화면</button>
-  <p class="tagline">코스피200·코스닥150 정배열과 국내·미국 ETF 흐름을 매일 한눈에</p>
+  <h1>Stock Trend Radar</h1>
+  <div class="tagline">코스피200 · 코스닥150 정배열과 국내·미국 ETF 흐름을 매일 한눈에</div>
   <div class="sub" id="updated">불러오는 중…</div>
-</div></header>
+</header>
 <main>
   <nav class="tabs" id="tabs">
     <button data-tab="home">🏠 오늘 요약</button>
     <button data-tab="kospi200">코스피200</button>
     <button data-tab="kosdaq150">코스닥150</button>
     <button data-tab="gauge">🌡️ 바닥·고점</button>
-    <button data-tab="oil">🛢️ 유가</button>
     <button data-tab="kr">국내 ETF</button>
     <button data-tab="us">미국</button>
     <button data-tab="sector">섹터</button>
@@ -334,7 +247,7 @@ const INDEX = {
   kospi200: { name: '코스피200', dir: 'data/kospi200/' },
   kosdaq150: { name: '코스닥150', dir: 'data/kosdaq150/' },
 };
-const state = { vTrend: false, tab: 'home', sort: 'days', q: '', view: 'today', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
+const state = { moreMA: false, vTrend: false, tab: 'home', sort: 'days', q: '', view: 'today', e2: true, gA: false, date: {}, cache: {}, sectorIx: 'kospi200', sectorSec: 'short', range: '3m', mode: 'pct' };
 const PALETTE = {
   light: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
   dark:  ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'],
@@ -1031,7 +944,7 @@ async function openChart(ixId, code) {
   const best = rs => rs.map(r => G[r] || 'C').sort((a, b) => rank[a] - rank[b])[0];
   const c = st.c, P = cd.pad, N = c.length;
   const ma = n => c.map((_, i) => { if (i < n - 1) return null; let s = 0; for (let k = i - n + 1; k <= i; k++) { if (c[k] == null) return null; s += c[k]; } return s / n; });
-  const m20 = ma(20), m60 = ma(60);
+  const m20 = ma(20), m60 = ma(60), m120 = ma(120), m5 = ma(5), m10 = ma(10);
   const lastClose = (() => { for (let i = N - 1; i >= 0; i--) if (c[i] != null) return c[i]; })();
   // 결과: 다음 날 종가에 샀다고 보고 20일 뒤(아직 안 됐으면 오늘)까지
   const after = i => { const j0 = i + 1; if (j0 >= N || c[j0] == null) return null; const j1 = Math.min(N - 1, j0 + 20);
@@ -1061,7 +974,9 @@ async function openChart(ixId, code) {
     <div class="legend" style="margin-top:8px">
       <span><span class="tri-up">▲</span> 상승 초입 (A·B등급 규칙)</span><span><span class="tri-off">△</span> 등급 미달 규칙</span>
       <span><span class="tri-dn">▼</span> 하락 경고 (60일선 꺾임)</span><span><span class="tri-pull">▽</span> 눌림 (60일선 상승 중)</span>
-      <span><i style="background:${COLORS[1]}"></i>20일선</span><span><i style="background:${COLORS[3]}"></i>60일선</span></div>
+      <span><i style="background:${COLORS[1]}"></i>20일선</span><span><i style="background:${COLORS[3]}"></i>60일선</span><span><i style="background:${COLORS[6]}"></i>120일선</span>
+      <span class="ma-more" ${state.moreMA ? '' : 'hidden'}><i style="background:${COLORS[0]}"></i>5일선 <i style="background:${COLORS[2]}"></i>10일선</span>
+      <button type="button" class="ma-btn">${state.moreMA ? '5·10일선 숨기기' : '+ 5·10일선 보기'}</button></div>
     <div class="stock-chart"><canvas id="sc"></canvas></div>
     <div class="one">표시된 날의 <b>다음 날</b>이 실제 대응 시점 · 이후 수익은 다음 날 종가 기준</div>
     ${rows ? `<table class="mk" style="margin-top:8px"><thead><tr><th class="num">날짜</th><th>신호</th><th class="num">이후 수익</th></tr></thead><tbody>${rows}</tbody></table>`
@@ -1074,6 +989,12 @@ async function openChart(ixId, code) {
   document.body.appendChild(box);
   bindHoldForm(box);
   let chart;
+  box.querySelector('.ma-btn').onclick = e => {
+    state.moreMA = !state.moreMA;
+    e.target.textContent = state.moreMA ? '5·10일선 숨기기' : '+ 5·10일선 보기';
+    box.querySelector('.ma-more').hidden = !state.moreMA;
+    if (chart) { chart.setDatasetVisibility(8, state.moreMA); chart.setDatasetVisibility(9, state.moreMA); chart.update(); }
+  };
   const close = () => { if (chart) chart.destroy(); box.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
@@ -1090,6 +1011,9 @@ async function openChart(ixId, code) {
       mk('△ 등급 미달', pts(true, 'C'), mut, 'triangle', 0, false),
       mk('▼ 하락 경고', pts(false, 'down'), dnC, 'triangle', 180, true),
       mk('▽ 눌림', pts(false, 'pull'), css('--notice-text'), 'triangle', 180, false),
+      { label: '120일선', data: sl(m120), borderColor: COLORS[6], borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 0, order: 3 },
+      { label: '5일선', data: sl(m5), borderColor: COLORS[0], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
+      { label: '10일선', data: sl(m10), borderColor: COLORS[2], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, order: 4, hidden: !state.moreMA },
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'),
@@ -1098,7 +1022,7 @@ async function openChart(ixId, code) {
         callbacks: { label: it => {
           const i = it.dataIndex + P;
           if (it.datasetIndex === 0) return ` 종가 ${fmtP(it.raw)}`;
-          if (it.datasetIndex < 3) return ` ${it.dataset.label} ${fmtP(it.raw)}`;
+          if (it.datasetIndex < 3 || it.datasetIndex >= 7) return ` ${it.dataset.label} ${fmtP(it.raw)}`;
           const m = marks.find(x => x.i === i && x.up === (it.datasetIndex < 5));
           if (!m) return '';
           return m.up ? ` ▲ ${m.rs.map(r => `${r}(${G[r] || 'C'})`).join(', ')}` : ` ${m.k === 'pull' ? '▽ 눌림' : '▼ 하락 경고'}: ${m.ws.map(w => wname[w] || w).join(', ')}`;
@@ -1222,223 +1146,6 @@ async function renderGauge() {
                 y: { type: 'logarithmic', ticks: { color: css('--muted'), maxTicksLimit: 6, callback: v => Math.round(v).toLocaleString() }, grid: { color: css('--grid') } } } } }));
 }
 
-// ---------------------------------------------------------- 🛢️ 유가 vs 코스피 (관찰용, 규칙 아님)
-// "유가는 코스피를 선행한다"를 쉬운 말로: k개월 전 유가와 이번 달 코스피가 같은 방향(둘 다 오름/내림)이었던 비율.
-// 50% = 동전 던지기(미리 알 수 없음). 표본 n개월이면 ±100/√n %p 밖이어야 우연으로 보기 어려움
-const OIL_RANGES = [['3m', '3개월', 0.25], ['6m', '6개월', 0.5], ['1y', '1년', 1], ['3y', '3년', 3], ['5y', '5년', 5], ['all', '전체', 99]];
-// 비교 단위: 일(거래일)·주·월. per = 1년에 들어가는 개수, mo = 1개월에 들어가는 개수(밀기 슬라이더용)
-const OIL_UNIT = {
-  d: { name: '일', per: 250, mo: 21, same: '전날 밤 유가', step: k => `${k}거래일`, short: k => k ? k + '일' : '전날 밤' },
-  w: { name: '주', per: 52, mo: 4.345, same: '같은 주', step: k => `${k}주`, short: k => k ? k + '주' : '같은 주' },
-  m: { name: '월', per: 12, mo: 1, same: '같은 달', step: k => `${k}개월`, short: k => k ? k + '개월' : '같은 달' },
-};
-// 월 단위 가격 = 주간 종가에서 매달 마지막 주만
-function oilMonthly(W) {
-  const o = { dates: [], kospi: [], brent: [], wti: [] };
-  W.dates.forEach((dt, i) => { const last = i === W.dates.length - 1 || W.dates[i + 1].slice(0, 7) !== dt.slice(0, 7);
-    if (last) ['kospi', 'brent', 'wti'].forEach(c => o[c].push(W[c][i])), o.dates.push(dt); });
-  return o;
-}
-// 🔮 '유가가 N개월 먼저 간다'고 가정했을 때의 코스피 예상 (주간 종가 기준) + 그 가정의 과거 성적
-function renderOilScenario(d, setShift) {
-  const el = document.getElementById('oscen'); if (!el) return;
-  const N = state.oShift, W = d.weekly, B = W.brent, K = W.kospi, last = B.length - 1;
-  const btns = `<div class="seg" id="olead" style="margin:6px 0">${[1, 2, 3, 4, 5, 6].map(m => `<button data-k="${m}" class="${N === m ? 'on' : ''}">${m}개월 먼저</button>`).join('')}</div>`;
-  const head = `<div class="sec-head"><h2>🔮 유가가 먼저 간다고 가정하면</h2><span class="count">가정 시나리오 · 주간 종가</span></div>`;
-  if (!N) { el.innerHTML = head + btns + '<div class="note" style="font-size:13px">유가가 코스피보다 몇 개월 먼저 움직인다고 가정할지 고르세요. 위 슬라이더와 연결되어 있습니다.</div>'; }
-  else {
-    const w = Math.round(N * 4.345), base = last - w;
-    // 미래 j주 뒤 코스피 ↔ 오늘로부터 (j−w)주 전 유가. j=0(오늘) ↔ base, j=w ↔ 오늘 유가
-    const path = B.slice(base, last + 1), chg = (B[last] / B[base] - 1) * 100, up = chg > 0;
-    const dateAt = j => { const t = new Date(W.dates[last] + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + 7 * j); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
-    // 지그재그: 5% 이상 되돌림이 나와야 방향이 바뀐 것으로 봄 → 상승·하락 구간 목록
-    const TH = 0.04 + 0.01 * N, piv = []; /* 길게 볼수록 작은 출렁임은 무시 (1개월 5% … 6개월 10%) */ let dir = 0, hi = 0, lo = 0, ext = 0;
-    for (let i = 1; i < path.length; i++) {
-      if (dir === 0) { if (path[i] > path[hi]) hi = i; if (path[i] < path[lo]) lo = i;
-        if (path[i] >= path[lo] * (1 + TH)) { piv.push(lo); dir = 1; ext = i; } else if (path[i] <= path[hi] * (1 - TH)) { piv.push(hi); dir = -1; ext = i; } }
-      else if (dir === 1) { if (path[i] >= path[ext]) ext = i; else if (path[i] <= path[ext] * (1 - TH)) { piv.push(ext); dir = -1; ext = i; } }
-      else { if (path[i] <= path[ext]) ext = i; else if (path[i] >= path[ext] * (1 + TH)) { piv.push(ext); dir = 1; ext = i; } }
-    }
-    if (dir) piv.push(ext);
-    const legs = []; for (let i = 0; i + 1 < piv.length; i++) legs.push({ up: path[piv[i + 1]] > path[piv[i]], a: piv[i], b: piv[i + 1] });
-    const legTxt = l => `${l.a === 0 ? '지금' : `약 ${l.a}주 뒤(${dateAt(l.a)})`}부터 ${dateAt(l.b)}쯤까지 ${l.up ? '상승 📈' : '하락 📉'}`;
-    const nextUp = legs.find(l => l.up);
-    const headline = !legs.length ? '➖ 뚜렷한 방향 없음' : legs[0].up && legs[0].a === 0 ? '📈 지금부터 코스피 상승 예정'
-      : nextUp ? `📈 약 ${nextUp.a}주 뒤(${dateAt(nextUp.a)})부터 상승 예정` : '📉 코스피 하락 예정';
-    const vcls = !legs.length ? '' : (legs[0].up && legs[0].a === 0) || nextUp ? 'ok' : 'no';
-    // 과거 성적: 겹치지 않게 w주 간격으로, '지난 N개월 유가 방향 = 다음 N개월 코스피 방향'이었나
-    let n = 0, hit = 0, sameDirUp = 0, nDir = 0, kUp = 0;
-    for (let i = last - w; i - w >= 0; i -= w) {
-      if (i + w > last) continue;
-      const o = B[i] / B[i - w] - 1, k = K[i + w] / K[i] - 1; if (!o || !k) continue;
-      n++; if ((o > 0) === (k > 0)) hit++; if (k > 0) kUp++;
-      if ((o > 0) === up) { nDir++; if ((k > 0) === up) sameDirUp++; }
-    }
-    const rate = n ? Math.round(hit / n * 100) : null, t = n ? 100 / Math.sqrt(n) : 99;
-    const j = rate == null ? 'few' : rate - 50 >= t ? 'ok' : 50 - rate >= t ? 'no' : 'few';
-    const jTxt = { ok: '과거에 맞는 편', no: '과거엔 오히려 반대', few: '동전 던지기 수준' }[j];
-    el.innerHTML = head + btns + `
-      <div class="verdict ${vcls}" style="font-size:15px">
-        <div style="font-size:22px;font-weight:800;letter-spacing:-0.02em">${headline} <span class="tag" style="font-size:13px;font-weight:500">(가정)</span></div>
-        ${legs.length ? `<div style="margin-top:4px">${legs.slice(0, 4).map(l => `• ${legTxt(l)}`).join('<br>')}</div>` : `<div>${dateAt(w)}쯤까지 ±${Math.round(TH * 100)}% 안에서 오르내림</div>`}
-        <div class="tag" style="font-size:13px;margin-top:6px">근거: ${N}개월 전부터 지금까지의 브렌트 흐름($${B[base]} → $${B[last]})을 ${N}개월 뒤로 옮긴 것입니다(위 차트의 점선 구간). 오르내리는 크기는 알 수 없고 <b>방향과 시점만</b> 봅니다. ${Math.round(TH * 100)}% 이상 되돌려야 방향이 바뀐 것으로 셉니다.</div>
-      </div>
-      <div class="gsec ${j === 'ok' ? 'bot2' : 'top'}" style="margin-top:8px"><div class="gh">⚠️ 이 가정의 과거 성적 <span class="jd ${j}">${jTxt}</span></div>
-        <div class="gnow">${W.dates[0].slice(0, 4)}년 이후 ${N}개월씩 끊어 ${n}번 확인: 유가 방향대로 코스피가 움직인 경우 <b>${rate}%</b> (동전 던지기 50%)</div>
-        <div class="gnow">${N}개월 유가가 ${up ? '올랐던' : '내렸던'} ${nDir}번 중 (지금처럼) 그 뒤 코스피가 ${up ? '오른' : '내린'} 경우 <b>${nDir ? Math.round(sameDirUp / nDir * 100) : '-'}%</b> · 평소 코스피가 ${N}개월 뒤 ${up ? '오른' : '내린'} 비율 ${n ? Math.round((up ? kUp : n - kUp) / n * 100) : '-'}%</div>
-      </div>
-      <div class="note">영상의 주장을 그대로 따랐을 때의 예상이며 매매 신호가 아닙니다. 과거 성적이 동전 던지기 수준이면 이 예상도 그만큼만 믿으세요.</div>`;
-  }
-  el.querySelector('#olead').onclick = e => { const b = e.target.closest('button'); if (b) setShift(+b.dataset.k); };
-}
-
-async function renderOil() {
-  let d;
-  try { d = await getJSON('data/oil.json'); }
-  catch { panel().innerHTML = '<div class="empty">유가 데이터가 아직 없습니다.<br>Actions에서 데이터 갱신을 한 번 실행해 주세요.</div>'; return; }
-  if (state.tab !== 'oil') return;
-  if (!d.units) { panel().innerHTML = '<div class="empty">유가 데이터 형식이 바뀌었습니다.<br>다음 자동 갱신 후 다시 열어 주세요.</div>'; return; }
-  state.oRange = state.oRange || '5y'; state.oShift = state.oShift ?? 0; state.oUnit = state.oUnit || 'w';
-  const UN = OIL_UNIT[state.oUnit], U = d.units[state.oUnit];
-  const yrs = d.from.slice(0, 4);
-  const lags = U.lags, L = Object.fromEntries(lags.map(l => [l.k, l]));
-  // 판정: 50%에서 충분히 벗어났나
-  const judge = (v, n) => { if (v == null || !n) return 'coin'; const t = 100 / Math.sqrt(n); return v - 50 >= t ? 'same' : 50 - v >= t ? 'opp' : 'coin'; };
-  const jAll = l => judge(l.agree, l.agree_n), jRec = l => judge(l.agree_recent, l.agree_n_recent);
-  const leads = lags.filter(l => l.k > 0);
-  const best = leads.slice().sort((x, y) => Math.abs(y.agree - 50) - Math.abs(x.agree - 50))[0];
-  const bestR = leads.slice().sort((x, y) => Math.abs(y.agree_recent - 50) - Math.abs(x.agree_recent - 50))[0];
-  const hitAll = leads.filter(l => jAll(l) !== 'coin'), hitRec = leads.filter(l => jRec(l) !== 'coin');
-  const CHIP = { same: ['ok', '같은 방향 경향'], opp: ['no', '반대 방향 경향'], coin: ['few', '동전 던지기'] };
-  const chip = j => `<span class="jd ${CHIP[j][0]}">${CHIP[j][1]}</span>`;
-  const answer = hitAll.length
-    ? (jAll(hitAll[0]) === 'same' ? `어느 정도는요. 유가가 ${hitAll.map(l => UN.step(l.k)).join('·')} 먼저 같은 방향으로 움직이는 경향이 있습니다.`
-                                  : `반대로요. 유가가 오르면 ${hitAll.map(l => UN.step(l.k)).join('·')} 뒤 코스피는 내리는 경향이 있습니다.`)
-    : '아니요. 유가를 먼저 봐도 코스피 방향을 맞히는 건 동전 던지기 수준입니다.';
-  const same0 = jAll(L[0]);
-  const tile = (big, title, sub, j) => `<div class="otile"><div class="otl">${title}</div><div class="obig">${big}</div>${chip(j)}<div class="tag" style="font-size:12px;margin-top:4px">${sub}</div></div>`;
-  const b1 = d.now.brent_1m;
-  const nowTxt = hitRec.length && jRec(hitRec[0]) !== 'coin' && b1 != null
-    ? `최근 한 달 브렌트 ${pctS(b1)}. 최근 3년 경향(${UN.name} 단위)대로라면 ${UN.step(hitRec[0].k)} 뒤 코스피는 <b>${(b1 > 0) === (jRec(hitRec[0]) === 'same') ? '오르는' : '내리는'} 쪽</b>이지만, 맞힌 비율이 ${hitRec[0].agree_recent}%라 참고만 하세요.`
-    : `최근 한 달 브렌트 ${pctS(b1)}, 3개월 ${pctS(d.now.brent_3m)}. 위 결과상 <b>이 숫자로 코스피 방향을 점치긴 어렵습니다.</b>`;
-  const C = Object.fromEntries(d.cond.map(c => [c.id, c])), base3 = C.base.h['3'];
-  const now3 = d.now.brent_3m, nowId = now3 >= 10 ? 'up' : now3 <= -10 ? 'dn' : 'base';
-  const condRow = (id, label) => { const r = C[id].h['3']; if (!r || !r.n) return '';
-    const diff = id === 'base' ? null : r.avg - base3.avg;
-    const ev = diff == null ? '' : r.n < 8 ? '<span class="jd few">사례 적음</span>' : diff >= 2 ? '<span class="jd ok">평소보다 좋았음</span>' : diff <= -2 ? '<span class="jd no">평소보다 나빴음</span>' : '<span class="jd few">평소와 비슷</span>';
-    return `<tr${id === 'base' ? ' class="base"' : ''}><td style="white-space:normal">${label}${id === nowId && id !== 'base' ? ' <span class="jd ok">지금 해당</span>' : ''}<br>${ev}</td>
-      <td class="num">${r.avg > 0 ? '+' : ''}${r.avg}%</td><td class="num">${r.win}%<br><span class="tag">${r.n}번</span></td></tr>`; };
-  panel().innerHTML = `
-    ${d.demo ? '<div class="notice">데모 데이터입니다. Actions가 실행되면 실제 시세로 바뀝니다.</div>' : ''}
-    <section>
-      <div class="sec-head"><h2>🛢️ 유가로 코스피를 미리 알 수 있을까?</h2><span class="count">${yrs}년~</span></div>
-      <div style="margin:8px 0 10px"><div class="tag" style="font-size:13px;margin-bottom:4px">비교 단위</div>
-        <div class="seg" id="ounit">${Object.entries(OIL_UNIT).map(([k, v]) => `<button data-k="${k}" class="${state.oUnit === k ? 'on' : ''}">${v.name} 단위</button>`).join('')}</div></div>
-      <div class="verdict ${hitAll.length ? 'ok' : 'no'}" style="font-size:15px"><b>${answer}</b></div>
-      <div class="otiles">
-        ${tile(L[0].agree + '%', UN.same + (state.oUnit === 'd' ? ' → 오늘 코스피' : ''), same0 === 'coin' ? '함께 움직인다고 보기 어려움' : same0 === 'same' ? '같이 움직임 (미리 알 순 없음)' : '서로 반대로 움직임', same0)}
-        ${tile(best.agree + '%', `유가가 먼저 (${UN.step(leads[0].k)}~${UN.step(leads[leads.length - 1].k)})`, `가장 잘 맞은 ${UN.step(best.k)} 기준 · ${best.agree_n.toLocaleString()}번 비교`, jAll(best))}
-        ${tile((bestR.agree_recent ?? '-') + '%', `최근 3년, 유가가 먼저`, `가장 잘 맞은 ${UN.step(bestR.k)} 기준 · ${bestR.agree_n_recent.toLocaleString()}번 비교`, jRec(bestR))}
-      </div>
-      <div class="one">🪙 숫자 = 유가와 코스피가 <b>같은 방향</b>(둘 다 오르거나 둘 다 내림)이었던 ${UN.name === '일' ? '날' : UN.name}의 비율. <b>50%면 동전 던지기</b>와 같아서 유가를 봐도 미리 알 수 없다는 뜻입니다.${state.oUnit === 'd' ? ' 일 단위의 <b>전날 밤 유가</b>는 한국 장이 끝나기 전 마지막 미국 유가 종가입니다.' : ''} 단위가 작을수록 비교 횟수가 많아 작은 차이도 잡히지만, 하루 이틀 움직임은 잡음이 큽니다.</div>
-      <div class="note" style="font-size:13px">📍 지금: ${nowTxt}</div>
-    </section>
-    <section>
-      <div class="sec-head"><h2>📈 두 그래프 겹쳐 보기</h2><span class="count">${{ d: '일간', w: '주간', m: '월간' }[state.oUnit]} 종가</span></div>
-      <div class="seg" id="orng" style="margin:6px 0">${OIL_RANGES.map(([k, l]) => `<button data-k="${k}" class="${state.oRange === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="legend"><span><i style="background:${css('--text')}"></i>코스피 (왼쪽 눈금)</span><span><i style="background:${COLORS[1]}"></i>브렌트유 (오른쪽, $${d.now.brent})</span><span><i style="background:${COLORS[3]}"></i>WTI ($${d.now.wti})</span></div>
-      <div class="shift"><span>유가를 뒤로 밀기</span><input id="osh" type="range" min="0" max="6" step="1" value="${state.oShift}"><b id="oshv">${state.oShift ? state.oShift + '개월' : '그대로'}</b></div>
-      <div class="one">👉 유가가 정말 먼저 움직인다면, 몇 달 뒤로 밀었을 때 검은 선(코스피)과 주황 선이 <b>더 잘 겹쳐야</b> 합니다. 밀면 오늘 이후로 넘어간 <b>점선 구간</b>이 '가정상 앞으로의 코스피 방향'입니다.</div>
-      <div style="position:relative;height:300px"><canvas id="och"></canvas></div>
-    </section>
-    <section id="oscen"></section>
-    <section>
-      <div class="sec-head"><h2>🔍 유가를 얼마나 먼저 보면 맞을까?</h2><span class="count">${UN.name} 단위 · 같은 방향 비율</span></div>
-      <div class="legend"><span><i style="background:${COLORS[0]}"></i>${yrs}년~ 전체</span><span><i style="background:${COLORS[2]}"></i>최근 3년</span><span class="tag">흐린 막대 = 동전 던지기와 차이 없음</span></div>
-      <div style="position:relative;height:240px"><canvas id="olag"></canvas></div>
-      <div class="note">점선(50%)에서 멀리 떨어진 <b>진한 막대</b>만 의미 있는 차이입니다. 위로 멀면 같은 방향, 아래로 멀면 반대 방향으로 움직였다는 뜻입니다.</div>
-    </section>
-    <section>
-      <div class="sec-head"><h2>🔄 요즘도 그럴까?</h2><span class="count">최근 3년씩 끊어 본 비율 · ${UN.name} 단위</span></div>
-      <div class="legend"><span><i style="background:${COLORS[0]}"></i>${UN.same}</span><span><i style="background:${COLORS[1]}"></i>유가 ${UN.step(1)} 먼저</span></div>
-      <div style="position:relative;height:220px"><canvas id="oroll"></canvas></div>
-      <div class="note">선이 50% 근처를 오가면 관계가 그때그때 바뀐다는 뜻입니다. 경기가 좋아서 유가가 오를 땐 같이 오르고, 전쟁·감산처럼 공급 문제로 오를 땐 반대로 움직이기 때문입니다.</div>
-    </section>
-    <section>
-      <div class="sec-head"><h2>✅ 유가가 크게 움직인 뒤 3개월</h2><span class="count">브렌트 3개월 ±10% 기준</span></div>
-      <div class="rt-wrap"><table class="sc rt"><thead><tr><th>그때 유가는</th><th class="num">코스피 3개월 뒤</th><th class="num">오른 확률</th></tr></thead><tbody>
-        ${condRow('base', '<b>평소 (아무 때나)</b>')}${condRow('up', '🔺 유가가 3개월에 10% 넘게 오른 뒤')}${condRow('dn', '🔻 유가가 3개월에 10% 넘게 내린 뒤')}
-      </tbody></table></div>
-      <div class="note">평소와 2%p 이상 차이 나야 '좋았음/나빴음'으로 표시합니다. 관찰용이며 매매 규칙에는 쓰지 않습니다.</div>
-    </section>`;
-  document.getElementById('ounit').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.oUnit = b.dataset.k; render(); };
-  document.getElementById('orng').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.oRange = b.dataset.k; render(); };
-  if (!window.Chart) return;
-  const tip = { backgroundColor: css('--tip-bg'), titleColor: css('--text'), bodyColor: css('--text'), borderColor: css('--line'), borderWidth: 1 };
-  const ax = { ticks: { color: css('--muted'), maxTicksLimit: 6 }, grid: { color: css('--grid') } };
-  const fifty = (n, t) => ({ type: 'line', label: '동전 던지기', data: new Array(n).fill(50), borderColor: css('--muted'), borderWidth: 1, borderDash: [4, 4], pointRadius: 0 });
-  // ① 가격 차트 (유가를 n개월 뒤로 밀어 겹쳐 보기)
-  const W = state.oUnit === 'd' ? d.daily : state.oUnit === 'w' ? d.weekly : oilMonthly(d.weekly);
-  const st = Math.max(0, W.dates.length - OIL_RANGES.find(r => r[0] === state.oRange)[2] * UN.per);
-  // 밀면 마지막 유가 값들이 오늘 이후(미래 날짜)로 넘어감 → 그 구간이 '가정상 예상'
-  const futDates = n => { const out = []; let t = new Date(W.dates[W.dates.length - 1] + 'T00:00:00Z');
-    while (out.length < n) {
-      if (state.oUnit === 'd') { t.setUTCDate(t.getUTCDate() + 1); if (t.getUTCDay() % 6 === 0) continue; }
-      else if (state.oUnit === 'w') t.setUTCDate(t.getUTCDate() + 7);
-      else t = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 2, 0));
-      out.push(t.toISOString().slice(0, 10)); }
-    return out; };
-  const nowIdx = W.dates.length - 1 - st;
-  const series = m => { const w = Math.round(m * UN.mo), all = W.dates.concat(futDates(w)), len = W.dates.length;
-    const sh = arr => all.map((_, i) => i - w >= 0 && i - w < len ? arr[i - w] : null).slice(st);
-    return { labels: all.slice(st), kospi: W.kospi.slice(st).concat(new Array(w).fill(null)), brent: sh(W.brent), wti: sh(W.wti) }; };
-  const fut = c => ({ borderDash: c => c.p0DataIndex >= nowIdx ? [5, 4] : undefined, borderColor: c2 => c2.p0DataIndex >= nowIdx ? c + 'aa' : c });
-  let S0 = series(state.oShift);
-  const pc = new Chart(document.getElementById('och'), { type: 'line',
-    data: { labels: S0.labels, datasets: [
-      { label: '코스피', data: S0.kospi, yAxisID: 'y', borderColor: css('--text'), borderWidth: 1.6, pointRadius: 0, tension: 0.1 },
-      { label: '브렌트유', data: S0.brent, yAxisID: 'y1', borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0, tension: 0.1, segment: fut(COLORS[1]) },
-      { label: 'WTI', data: S0.wti, yAxisID: 'y1', borderColor: COLORS[3], borderWidth: 1, borderDash: [4, 3], pointRadius: 0, tension: 0.1 }] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.raw != null,
-        callbacks: { title: it => it[0].label + (it[0].dataIndex > nowIdx ? ' (가정상 예상)' : ''),
-                     label: it => it.datasetIndex === 0 ? ` 코스피 ${Math.round(it.raw).toLocaleString()}` : ` ${it.dataset.label} $${it.raw}${state.oShift ? ` (${state.oShift}개월 전 값)` : ''}` } } },
-      scales: { x: { ...ax, ticks: { ...ax.ticks, maxTicksLimit: 5, maxRotation: 0, callback: function (v, i) { const dt = this.getLabelForValue(v); return state.oRange === '3m' || state.oRange === '6m' || (state.oRange === '1y' && state.oUnit !== 'm') ? dt.slice(5).replace('-', '/') : dt.slice(2, 7).replace('-', '.'); } } },
-                y: { ...ax, position: 'left', ticks: { ...ax.ticks, callback: v => Math.round(v).toLocaleString() } },
-                y1: { ...ax, position: 'right', grid: { drawOnChartArea: false }, ticks: { ...ax.ticks, callback: v => '$' + Math.round(v) } } } } });
-  charts.push(pc);
-  const sh = document.getElementById('osh');
-  const setShift = m => { state.oShift = m; sh.value = m; document.getElementById('oshv').textContent = m ? m + '개월' : '그대로';
-    const S = series(m); pc.data.labels = S.labels; pc.data.datasets[0].data = S.kospi; pc.data.datasets[1].data = S.brent; pc.data.datasets[2].data = S.wti; pc.update('none');
-    renderOilScenario(d, setShift); };
-  sh.oninput = () => setShift(+sh.value);
-  renderOilScenario(d, setShift);
-  // ② 시차별 '같은 방향' 비율 (의미 없는 막대는 흐리게)
-  const fade = (c, on) => on ? c : c + '55';
-  charts.push(new Chart(document.getElementById('olag'), { type: 'bar',
-    data: { labels: lags.map(l => UN.short(l.k)), datasets: [
-      { label: `${yrs}년~ 전체`, data: lags.map(l => l.agree), backgroundColor: lags.map(l => fade(COLORS[0], jAll(l) !== 'coin')), borderRadius: 2 },
-      { label: '최근 3년', data: lags.map(l => l.agree_recent), backgroundColor: lags.map(l => fade(COLORS[2], jRec(l) !== 'coin')), borderRadius: 2 },
-      fifty(lags.length)] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.datasetIndex < 2,
-        callbacks: { title: it => { const k = lags[it[0].dataIndex].k; return k ? `유가가 ${UN.step(k)} 먼저` : UN.same; },
-                     label: it => { const l = lags[it.dataIndex], j = it.datasetIndex ? jRec(l) : jAll(l), n = it.datasetIndex ? l.agree_n_recent : l.agree_n;
-                       return ` ${it.dataset.label}: ${it.raw}% 같은 방향 (${n.toLocaleString()}번) → ${CHIP[j][1]}`; } } } },
-      scales: { x: { ...ax, grid: { display: false }, ticks: { ...ax.ticks, autoSkip: false, maxRotation: 0, font: { size: 11 } } }, y: { ...ax, min: 20, max: 80, ticks: { ...ax.ticks, callback: v => v + '%' } } } } }));
-  // ③ 최근 36개월씩 끊어 본 '같은 방향' 비율
-  const M = { dates: U.roll_dates }, RA = U.roll;
-  charts.push(new Chart(document.getElementById('oroll'), { type: 'line',
-    data: { labels: M.dates, datasets: [
-      { label: UN.same, data: RA['0'], borderColor: COLORS[0], borderWidth: 1.6, pointRadius: 0 },
-      { label: `유가 ${UN.step(1)} 먼저`, data: RA['1'], borderColor: COLORS[1], borderWidth: 1.4, pointRadius: 0 },
-      fifty(M.dates.length)] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { ...tip, filter: it => it.datasetIndex < 2 && it.raw != null, callbacks: { label: it => ` ${it.dataset.label} ${it.raw}%` } } },
-      scales: { x: { ...ax, ticks: { ...ax.ticks, maxRotation: 0, callback: (v, i) => M.dates[i].slice(0, 4) } },
-                y: { ...ax, min: 20, max: 80, ticks: { ...ax.ticks, callback: v => v + '%' } } } } }));
-}
-
 // 최신 VIX (어젯밤 미국 종가)와 최근 10거래일 최고값 — us_trend.json에서 바로 읽음
 function vixLatest(us) {
   if (!us) return null;
@@ -1513,49 +1220,15 @@ async function renderHome() {
   const mk = [['코스피', chg(kr, '코스피')], ['코스닥', chg(kr, '코스닥')]];
   const usk = [['S&P 500', chg(us, 'S&P500')], ['나스닥', chg(us, '나스닥 종합')], ['반도체', chg(us, '필라델피아 반도체')], ['VIX', chg(us, 'VIX 공포지수')]];
   const usDate = us ? us.dates[us.dates.length - 1].slice(5).replace('-', '/') : '';
-  const krDate = ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : '';
-  const fmtV = v => v.last >= 1000 ? Math.round(v.last).toLocaleString() : v.last.toFixed(2);
-  const tick = ([n, v], inv) => `<li><span class="tn">${n}</span><span class="tv">${v ? fmtV(v) : '-'}</span>${v ? (inv
-      ? `<span class="${v.d > 0 ? 'ret-dn' : 'ret-up'}">${v.d > 0 ? '+' : ''}${v.d.toFixed(2)}%</span>` : pc(v.d)) : ''}</li>`;
-  // 계기판: 값이 눈금 위 어디에 있는지 (구간 색 + 기준선 + 바늘)
-  const gauge = ({ name, v, min, max, rev, zones, marks, ghost, val, note }) => {
-    if (v == null) return '';
-    const at = x => Math.min(100, Math.max(0, rev ? (max - x) / (max - min) * 100 : (x - min) / (max - min) * 100));
-    const z = zones.map(([a, b, c]) => { const l = Math.min(at(a), at(b)), r = Math.max(at(a), at(b));
-      return `<i class="gz-${c}" style="left:${l}%;width:${r - l}%"></i>`; }).join('');
-    const m = marks.map(([x, t]) => `<b class="gm" style="left:${at(x)}%"><span>${t}</span></b>`).join('');
-    return `<div class="gg"><div class="ggh"><span>${name}</span><strong>${val}</strong></div>
-      <div class="ggt">${z}${m}${ghost != null ? `<em class="ghost" style="left:${at(ghost)}%" title="최근 10일 최고"></em>` : ''}<u style="left:${at(v)}%"></u></div>
-      <div class="ggn">${note}</div></div>`;
-  };
-  const b200 = br.find(b => b.k === 'kospi200'), b150 = br.find(b => b.k === 'kosdaq150');
-  const brNote = b => `${b.now <= 20 ? '약세장' : b.now >= 50 ? '강세장' : '보통'}${b.d5 != null ? ` · 5일 ${b.d5 > 0 ? '+' : ''}${b.d5.toFixed(1)}%p` : ''}`;
-  const gauges = [
-    K && K.now.dd != null ? gauge({ name: '코스피 1년 최고가 대비', v: K.now.dd, min: -50, max: 0, rev: true, zones: [[-20, -50, 'cold']], marks: [[-20, '−20%']],
-      val: `${K.now.dd}%`, note: `${K.now.dd <= -20 ? '많이 빠짐' : '정상 범위'}${K.now.gap != null ? ` · 120일선 대비 ${K.now.gap}%` : ''}` }) : '',
-    ...[b200, b150].filter(b => b && b.now != null).map(b => gauge({ name: `${b.name} 체온계`, v: b.now, min: 0, max: 100,
-      zones: [[0, 20, 'cold'], [50, 100, 'hot']], marks: [[20, '20'], [50, '50']], val: `${b.now}%`, note: brNote(b) })),
-    VX ? gauge({ name: 'VIX 공포지수', v: VX.now, min: 10, max: 45, zones: [[30, 45, 'cold'], [10, 13, 'hot']], marks: [[13, '13'], [30, '30']], ghost: VX.max10,
-      val: VX.now, note: `어젯밤 미국 · 최근 10일 최고 ${VX.max10}` }) : '',
-  ].join('');
-  // 바닥 확인 신호 2개: 켜졌는지, 과거에도 맞았는지
-  const lamp = (label, list) => {
-    const st = list.length ? (list.some(t => t.active && gaugeJudge(t)[0] === 'ok') ? 'on' : list.some(t => t.active) ? 'weak' : 'off') : 'off';
-    return `<li class="lamp ${st}"><i></i>${label}<span>${st === 'on' ? '켜짐' : st === 'weak' ? '켜짐 · 과거엔 효과 없음' : '꺼짐'}</span></li>`;
-  };
-  const tests = id => g ? g.markets.map(m => m.tests.find(t => t.id === id)).filter(Boolean) : [];
-  const lamps = g ? `<ul class="lamps">${lamp('VIX 급등 후 꺾임', tests('vix_turn').slice(0, 1))}${lamp('체온계 10% → 20% 회복', tests('br_up'))}</ul>` : '';
-  // 3) 오늘 신호: 종목명을 바로 보여주고 누르면 차트
-  const chipList = (k, arr, cls) => arr.length
-    ? arr.map(x => `<button class="sn ${cls}" data-ix="${k}" data-code="${x.code}">${esc(x.name)}${x.g && cls === 'up' ? `<small>${x.g}</small>` : ''}</button>`).join('')
-    : '<span class="none">없음</span>';
+  const tile = ([n, v], inv) => `<div class="htile"><div class="tag">${n}</div><div class="hv">${v ? (v.last >= 1000 ? Math.round(v.last).toLocaleString() : v.last.toFixed(2)) : '-'}</div><div>${v ? (inv ? `<span class="${v.d > 0 ? 'ret-dn' : 'ret-up'}">${v.d > 0 ? '+' : ''}${v.d.toFixed(2)}%</span>` : pc(v.d)) : ''}</div></div>`;
+  // 3) 오늘 신호
   const sigs = Object.entries(ix).map(([k, v]) => {
     const t = (v.data && v.data.today) || [];
     const up = t.filter(x => x.u && x.g !== 'C'), dn = t.filter(x => x.d === 'down'), pl = t.filter(x => x.d === 'pull');
-    return `<div class="sigcol"><div class="sigh"><b>${INDEX[k].name}</b><button class="lnk" data-go="${k}">전체 보기</button></div>
-      <div class="sigr"><span class="tri-up">▲ 상승 초입</span><div>${chipList(k, up, 'up')}</div></div>
-      <div class="sigr"><span class="tri-pull">▽ 눌림</span><div>${chipList(k, pl, 'pull')}</div></div>
-      <div class="sigr"><span class="tri-dn">▼ 하락 경고</span><div>${chipList(k, dn, 'dn')}</div></div></div>`;
+    const nm = arr => arr.slice(0, 4).map(x => esc(x.name)).join(', ') + (arr.length > 4 ? ` 외 ${arr.length - 4}` : '');
+    return `<div class="hsig" data-go="${k}"><b>${INDEX[k].name}</b>
+      <div><span class="tri-up">▲ 상승 초입 ${up.length}</span>${up.length ? ` <span class="tag">${nm(up)}</span>` : ''}</div>
+      <div><span class="tri-dn">▼ 하락 경고 ${dn.length}</span>${dn.length ? ` <span class="tag">${nm(dn)}</span>` : ''} · <span class="tri-pull">▽ 눌림 ${pl.length}</span></div></div>`;
   }).join('');
   // 4) 내 종목
   const mine = loadH();
@@ -1572,19 +1245,17 @@ async function renderHome() {
       🔴 이탈 ${cnt.r} · 🟡 근접 ${cnt.y} · 🟢 여유 ${cnt.g}${cnt.x ? ` · 가격 없음 ${cnt.x}` : ''}`;
   }
   panel().innerHTML = `
-    <ul class="ticker" aria-label="최근 장 마감">${mk.map(x => tick(x)).join('')}${usk.map((x, i) => tick(x, i === 3)).join('')}
-      <li class="tdate">한국 ${krDate} · 미국 ${usDate}</li></ul>
-    <section class="cockpit ${cls}">
-      <div class="verdict"><div class="hh">${head}</div><div class="ha">${advice}</div>
-        <div class="lamph">바닥 확인 신호</div>${lamps}
-        <button class="lnk" data-go="gauge">바닥·고점 근거 보기</button></div>
-      <div class="gauges">${gauges}</div>
-    </section>
-    <section><div class="sec-head"><h2>장 마감 신호</h2><span class="count">${krDate} 기준 · 종목을 누르면 차트와 손절선</span></div>
-      <div class="sigs">${sigs}</div></section>
-    <section><div class="sec-head"><h2>내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
-    ${ex('① 맨 위 결론으로 오늘이 관찰 구간인지 확인 → ② 내 종목에 🔴가 있으면 정한 대로 정리 → ③ 관찰 구간이 아니면 ▲ 종목을 눌러 차트·손절선 확인(과열·큰 흐름 하락 배지는 피하기) → ④ 한 달에 한 번 성적표의 실전 기록 확인', '📋 매일 보는 순서')}`;
-  panel().querySelectorAll('button.sn').forEach(b => b.onclick = () => openChart(b.dataset.ix, b.dataset.code));
+    <section class="hero ${cls}"><div class="hh">${head}</div><div class="ha">${advice}</div>
+      <ul class="hw">${why.map(w => `<li>${w}</li>`).join('')}</ul>
+      <div class="hgo"><button data-go="gauge">🌡️ 바닥·고점 자세히 →</button></div></section>
+    <section><div class="sec-head"><h2>📊 최근 장 마감</h2><span class="count">한국 ${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') : ''} · 미국 ${usDate} (현지)</span></div>
+      <div class="hgrid two">${mk.map(x => tile(x)).join('')}</div>
+      <div class="hgrid" style="margin-top:8px">${usk.map(x => tile(x)).join('')}</div>
+      <div class="note">VIX↑ = 불안↑ · <button class="lnk" data-go="us">미국 자세히 →</button> <button class="lnk" data-go="kr">국내 ETF 자세히 →</button></div></section>
+    <section><div class="sec-head"><h2>🔔 장 마감 신호</h2><span class="count">${ix.kospi200 ? ix.kospi200.meta.dates[0].slice(5).replace('-', '/') + ' 기준 · ' : ''}누르면 해당 탭으로</span></div>${sigs}
+</section>
+    <section><div class="sec-head"><h2>💼 내 종목</h2></div><div class="note" style="font-size:14px">${holdTxt}</div></section>
+    ${ex('① 위 결론 상자로 오늘이 관찰 구간인지 확인 → ② 💼 내 종목에 🔴가 있으면 정한 대로 정리 → ③ 관찰 구간이 아니면 🔔 신호의 ▲ 종목을 눌러 차트·손절선 확인(과열·큰 흐름 하락 배지는 피하기) → ④ 한 달에 한 번 성적표의 실전 기록 확인', '📋 매일 보는 순서')}`;
   panel().querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     state.tab = b.dataset.go; if (INDEX[state.tab]) state.view = 'today';
     try { history.replaceState(null, '', '#' + state.tab); } catch {} render(); window.scrollTo(0, 0); });
@@ -1594,12 +1265,11 @@ async function renderHome() {
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  if (state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
+  if (state.tab === 'home' || state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();
     else if (state.tab === 'gauge') await renderGauge();
-    else if (state.tab === 'oil') await renderOil();
     else if (state.tab === 'home') await renderHome();
     else await renderTrend(state.tab);
   } catch (e) {

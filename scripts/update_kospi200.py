@@ -1130,7 +1130,7 @@ def forward_wr(ix_id, price, wr, trend_mask, info, today):
 
 # ---------------------------------------------------------------- 종목 차트 (진입·경고 시점 표시)
 CHART_DAYS = 120      # 화면에 보이는 기간
-CHART_PAD = 60        # 60일선 계산용 앞 구간
+CHART_PAD = 120       # 120일선 계산용 앞 구간 (화면에는 최근 120일만)
 
 
 def chart_data(ix_id, price, info, rfires, gmap, sig, val=None):
@@ -1536,106 +1536,6 @@ def build_gauge(demo, updated):
     (DATA / "market_gauge.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
 
 
-# ---------------------------------------------------------------- 🛢️ 유가 vs 코스피 (관찰용)
-# "유가는 코스피를 선행한다"는 주장을 데이터로 직접 확인하는 탭. 기존 규칙·등급에는 쓰지 않음.
-OIL_TICKERS = {"brent": "BZ=F", "wti": "CL=F"}   # 통계는 브렌트(두바이유와 비슷하게 움직이고, WTI는 2020.4 마이너스 가격 왜곡)
-# 단위별 시차(+k = 유가가 k단위 먼저)와 '최근' 구간(약 3년, 이동 비율 창도 같은 길이)
-OIL_UNITS = {
-    "d": {"lags": [0, 1, 2, 3, 5, 10, 20], "recent": 750, "roll_lags": [0, 1]},
-    "w": {"lags": [0, 1, 2, 3, 4, 6, 8, 12], "recent": 156, "roll_lags": [0, 1]},
-    "m": {"lags": [0, 1, 2, 3, 4, 5, 6], "recent": 36, "roll_lags": [0, 1]},
-}
-
-
-def _same_dir(a, b):
-    """두 수익률이 같은 방향이면 1, 반대면 0, 한쪽이 없거나 0이면 NaN"""
-    sa, sb = np.sign(a), np.sign(b)
-    ok = a.notna() & b.notna() & (sa != 0) & (sb != 0)
-    return (sa == sb).astype(float).where(ok)
-
-
-def build_oil(demo, updated):
-    if demo:
-        rng = np.random.default_rng(21)
-        days = pd.bdate_range(end=datetime.now(KST).date(), periods=GAUGE_DAYS // 2)
-        z = np.cumsum(rng.normal(0, 0.012, len(days)))
-        kospi = pd.Series(2000 * np.exp(0.6 * z + np.cumsum(rng.normal(0.0002, 0.009, len(days)))), index=days)
-        oil = {"brent": pd.Series(70 * np.exp(z + np.cumsum(rng.normal(0, 0.012, len(days)))), index=days)}
-        oil["wti"] = oil["brent"] * 0.94
-    else:
-        kospi = naver_history("KOSPI", GAUGE_DAYS)["close"].replace(0, np.nan).dropna()
-        kospi = drop_intraday(kospi.to_frame("c"))["c"]
-        import yfinance as yf
-        oil = {}
-        for k, t in OIL_TICKERS.items():
-            raw = yf.download(t, period="25y", interval="1d", auto_adjust=True, progress=False)
-            v = raw["Close"]
-            v = v.iloc[:, 0] if isinstance(v, pd.DataFrame) else v
-            v.index = pd.to_datetime(v.index).tz_localize(None).normalize()
-            oil[k] = v.dropna().sort_index()
-    br = oil["brent"]
-    start = max(kospi.index[0], br.index[0])
-    kospi, oil = kospi[kospi.index >= start], {k: v[v.index >= start] for k, v in oil.items()}
-
-    # 월말 종가 (조건부 성적용)
-    km = kospi.resample("ME").last()
-    om = oil["brent"].resample("ME").last().reindex(km.index)
-
-    # 단위별(일·주·월) '같은 방향' 비율. 일 단위는 한국 장 마감 전 마지막 미국 종가(전날 밤 유가)에 맞춤
-    br_d = _vix_on(kospi.index, oil["brent"])
-    series = {"d": (kospi, br_d),
-              "w": (kospi.resample("W-FRI").last(), br_d.resample("W-FRI").last()),
-              "m": (km, br_d.resample("ME").last())}
-    units = {}
-    for u_, (kp, op) in series.items():
-        kp, op = kp.dropna(), op.reindex(kp.dropna().index)
-        kr, orr = kp.pct_change(), op.pct_change()
-        rec_n, roll_n = OIL_UNITS[u_]["recent"], OIL_UNITS[u_]["recent"]
-        recent = kr.index[-rec_n:]
-        rows = []
-        for k in OIL_UNITS[u_]["lags"]:
-            same = _same_dir(orr.shift(k), kr)
-            sr = same.loc[recent].dropna()
-            rows.append({"k": k, "agree": _r(same.mean() * 100, 1), "agree_n": int(same.notna().sum()),
-                         "agree_recent": _r(sr.mean() * 100, 1) if len(sr) else None, "agree_n_recent": int(len(sr))})
-        roll_idx = kr.index if u_ != "d" else kr.index[::5]          # 일 단위 이동 비율은 5일마다만 저장(용량)
-        roll = {str(k): [_r(x * 100, 0) for x in _same_dir(orr.shift(k), kr)
-                         .rolling(roll_n, min_periods=roll_n // 2).mean().reindex(roll_idx)]
-                for k in OIL_UNITS[u_]["roll_lags"]}
-        units[u_] = {"lags": rows, "recent": rec_n, "roll_dates": [d.strftime("%Y-%m-%d") for d in roll_idx], "roll": roll}
-
-    # 조건부 성적: 직전 3개월 유가가 올랐을 때/내렸을 때, 그다음 1·3개월 코스피
-    o3 = om.pct_change(3) * 100
-    f1, f3 = (km.shift(-1) / km - 1) * 100, (km.shift(-3) / km - 1) * 100
-    def bucket(mask):
-        out = {}
-        for h, f in (("1", f1), ("3", f3)):
-            v = f[mask].dropna()
-            out[h] = {"n": int(len(v)), "avg": _r(v.mean(), 1) if len(v) else None,
-                      "win": _r((v > 0).mean() * 100, 0) if len(v) else None}
-        return out
-    cond = [{"id": "up", "name": "유가 3개월 +10% 이상 상승", "h": bucket(o3 >= 10)},
-            {"id": "dn", "name": "유가 3개월 −10% 이상 하락", "h": bucket(o3 <= -10)},
-            {"id": "base", "name": "평소 (아무 달이나)", "h": bucket(o3.notna())}]
-
-    wk = pd.DataFrame({"kospi": kospi, **oil}).resample("W-FRI").last().dropna(subset=["kospi"]).ffill()
-    out = {"updated": updated, "demo": demo, "from": start.strftime("%Y-%m-%d"),
-           "to": kospi.index[-1].strftime("%Y-%m-%d"),
-           "now": {"brent": _r(oil["brent"].iloc[-1], 2), "wti": _r(oil["wti"].iloc[-1], 2),
-                   "oil_date": oil["brent"].index[-1].strftime("%Y-%m-%d"),
-                   "brent_3m": _r(o3.iloc[-1], 1), "kospi": _r(kospi.iloc[-1], 2),
-                   "brent_1m": _r((oil["brent"].iloc[-1] / oil["brent"].iloc[-22] - 1) * 100, 1)},
-           "units": units, "cond": cond,
-           "daily": {"dates": [d.strftime("%Y-%m-%d") for d in kospi.index], "kospi": [_r(x, 2) for x in kospi],
-                     "brent": [_r(x, 2) for x in br_d], "wti": [_r(x, 2) for x in _vix_on(kospi.index, oil["wti"])]},
-           "weekly": {"dates": [d.strftime("%Y-%m-%d") for d in wk.index],
-                      **{c: [_r(x, 2) for x in wk[c]] for c in wk.columns}}}
-    DATA.mkdir(exist_ok=True)
-    (DATA / "oil.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"  유가 {out['from']}~{out['to']} ({len(km)}개월), 같은 방향 비율 "
-          + ", ".join(f"{u_}{units[u_]['lags'][1]['k']}={units[u_]['lags'][1]['agree']}%" for u_ in units))
-
-
 # ---------------------------------------------------------------- 텔레그램 알림
 DASHBOARD_URL = "https://hongsup79-creator.github.io/KOSPI-200/"
 
@@ -1750,12 +1650,6 @@ def main():
         build_gauge(args.demo, updated)
     except Exception as e:
         warn(f"바닥·고점 지표판 실패(다른 기능은 정상): {e}")
-
-    print("[유가 vs 코스피]")
-    try:
-        build_oil(args.demo, updated)
-    except Exception as e:
-        warn(f"유가 탭 실패(다른 기능은 정상): {e}")
 
     if ok:
         sector_out["updated"] = updated
