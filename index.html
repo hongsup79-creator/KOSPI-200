@@ -256,6 +256,9 @@
   .ticker { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px 0;
             border-bottom: 1px solid var(--line); padding-bottom: 12px; font-variant-numeric: tabular-nums; }
   .ticker::-webkit-scrollbar { display: none; }
+  .nightbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 14px; }
+  .nightbar .tag { margin-top: 3px; line-height: 1.5; } .nb-on { color: var(--bot); }
+  .nb-go { flex: none; padding: 7px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; font-size: 13px; }
   .ticker li { display: flex; flex-direction: column; padding: 0 14px; border-left: 1px solid var(--line); font-size: 14px; white-space: nowrap; }
   .ticker li:first-child { padding-left: 0; border-left: 0; }
   .ticker .tn { color: var(--muted); font-size: 13px; } .ticker .tv { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
@@ -1504,6 +1507,18 @@ async function renderConfirm() {
   el.querySelector('.confirm').onclick = () => { if (state.tab !== 'gauge') { state.tab = 'gauge'; location.hash = 'gauge'; render(); } };
 }
 
+// 🌙 코스피200 야간선물: 실시간이 중요해서 숫자를 저장하지 않고 실시간 시세 화면으로 연결
+// (한국거래소 야간시장: 평일 18:00 ~ 다음 날 06:00, 미국 서머타임 기간은 05:00 종료)
+function nightBar() {
+  const k = new Date(Date.now() + 9 * 3600e3), d = k.getUTCDay(), m = k.getUTCHours() * 60 + k.getUTCMinutes();
+  const open = (d >= 1 && d <= 5 && m >= 18 * 60) || (d >= 2 && d <= 6 && m < 6 * 60);
+  const after = (d >= 2 && d <= 6 && m >= 6 * 60 && m < 9 * 60);   // 야간 마감 후 ~ 정규장 시작 전: 가장 볼 만한 시간
+  const st = open ? '<b class="nb-on">● 지금 거래 중</b>' : after ? '<b>야간 마감 · 오늘 시초가 참고 시간</b>' : '<span class="tag">지금은 거래 시간 아님</span>';
+  return `<div class="nightbar"><div><b>🌙 코스피200 야간선물</b> ${st}
+      <div class="tag">평일 18:00~다음 날 06:00 · <b>+1% 이상</b>이면 다음 날 갭상승, <b>−1% 이하</b>면 갭하락 가능성 (참고용)</div></div>
+    <a class="nb-go" href="https://stockhub.kr/charts" target="_blank" rel="noopener">실시간 보기 ↗</a></div>`;
+}
+
 // ---------------------------------------------------------- 🏠 오늘 요약 (한 화면에 결론만)
 async function renderHome() {
   const tryJ = async u => { try { return await getJSON(u); } catch { return null; } };
@@ -1601,6 +1616,7 @@ async function renderHome() {
   panel().innerHTML = `
     <ul class="ticker" aria-label="최근 장 마감">${mk.map(x => tick(x)).join('')}${usk.map((x, i) => tick(x, i === 3)).join('')}
       <li class="tdate">한국 ${krDate} · 미국 ${usDate}</li></ul>
+    ${nightBar()}
     <section class="cockpit ${cls}">
       <div class="verdict"><div class="hh">${head}</div><div class="ha">${advice}</div>
         <div class="lamph">바닥 확인 신호</div>${lamps}
