@@ -225,20 +225,27 @@
   .hsig { background: var(--sunk); border-radius: 6px; padding: 10px 14px; margin-top: 8px; cursor: pointer; line-height: 1.8; font-size: 14px; }
   .hsig:hover { box-shadow: inset 0 0 0 1px var(--line); }
   .hsteps { margin: 0; padding-left: 20px; line-height: 1.9; font-size: 14px; }
-  .confirm { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; cursor: pointer; font-size: 14px; }
-  .confirm.on { border: 2px solid var(--green); background: var(--green-bg); }
-  .confirm .cf { display: inline-block; margin: 4px 6px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
-  .confirm .cfn { margin-top: 5px; font-size: 13px; color: var(--muted); line-height: 1.55; }
-  .confirm.on .cfn { color: var(--text); }
-  .gsec { background: var(--sunk); border: 0; border-left: 4px solid; border-radius: 4px 6px 6px 4px; padding: 8px 12px; margin: 8px 0; }
-  .gsec.bot { border-left-color: var(--grid); } .gsec.bot2 { border-left-color: var(--bot); } .gsec.top { border-left-color: var(--top); }
-  .gsec .gh { font-weight: 800; font-size: 15px; margin-bottom: 4px; }
-  .gstep { display: flex; gap: 8px; padding: 6px 2px; border-top: 1px dashed var(--line); }
-  .gstep:first-of-type { border-top: 0; }
-  .gck { font-size: 16px; color: var(--muted); line-height: 1.3; } .gstep.on .gck { color: var(--bot); }
-  .gsec.top .gstep.on .gck { color: var(--top); }
-  .gtl { font-weight: 600; font-size: 14px; } .gnow { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  .gstep.on .gtl { font-weight: 800; }
+  /* 바닥 3단계 막대: 평소 → ① 많이 빠짐 → ② 돌아섬 확인 */
+  .bsteps { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .bsteps li { border-top: 8px solid var(--grid); padding-top: 7px; text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); line-height: 1.35; }
+  .bsteps li.past { border-top-color: var(--muted); }
+  .bsteps li.cur { border-top-color: var(--top); color: var(--text); font-size: 14px; }
+  .bsteps li.cur.s2 { border-top-color: var(--bot); }
+  .bsteps li.cur::after { content: '▲ 지금 여기'; display: block; font-size: 12px; color: var(--top); margin-top: 2px; }
+  .bsteps li.cur.s2::after { color: var(--bot); }
+  .bsteps small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+  .bdo { background: var(--sunk); border-radius: 8px; padding: 10px 12px; font-size: 15px; line-height: 1.6; margin: 10px 0 4px; }
+  .bbox { margin-top: 16px; }
+  .bbox h3 { font-size: 15px; margin: 0 0 6px; }
+  .bchk { list-style: none; margin: 0; padding: 0; }
+  .bchk li { display: flex; gap: 8px; padding: 7px 0; border-top: 1px dashed var(--line); font-size: 14px; line-height: 1.5; }
+  .bchk li:first-child { border-top: 0; }
+  .bchk .ck { flex: 0 0 22px; font-weight: 800; text-align: center; }
+  .bchk .ck.y { color: var(--bot); } .bchk .ck.n { color: var(--muted); } .bchk .ck.t { color: var(--top); }
+  .tstat { display: inline-block; font-weight: 800; font-size: 17px; padding: 6px 14px; border-radius: 999px; background: var(--sunk); margin: 4px 0 2px; }
+  .tstat.on { background: var(--top); color: #fff; }
+  .tdist { display: inline-block; font-size: 12px; font-weight: 700; color: var(--muted); background: var(--sunk); border-radius: 6px; padding: 0 6px; margin-left: 4px; }
+  .bchk .tag { display: block; }
   .jd { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
   .jd.ok { background: var(--green-bg); color: var(--green); } .jd.no { background: var(--grid); color: var(--muted); } .jd.few { background: var(--grid); color: var(--muted); }
   .gok { color: var(--bot); }
@@ -270,12 +277,6 @@
   .cockpit.cold .hh { color: var(--dn); } .cockpit.good .hh { color: var(--green); } .cockpit.hot .hh { color: var(--top); }
   .verdict .ha { font-size: 16px; line-height: 1.7; max-width: 34em; }
   .lamph { margin: 22px 0 8px; font-size: 13px; color: var(--muted); }
-  .lamps { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; }
-  .lamp { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
-  .lamp i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); flex: 0 0 auto; }
-  .lamp span { margin-left: auto; font-weight: 500; font-size: 13px; color: var(--muted); }
-  .lamp.on i { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 4px var(--green-bg); } .lamp.on span { color: var(--green); font-weight: 700; }
-  .lamp.weak i { background: linear-gradient(90deg, var(--muted) 50%, transparent 50%); }
   .gauges { padding: 22px 24px; display: grid; gap: 18px; align-content: center; }
   .ggh { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
   .ggh strong { font-size: 20px; color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
@@ -330,7 +331,6 @@
     <button data-tab="us">미국</button>
     <button data-tab="sector">섹터</button>
   </nav>
-  <div id="confirm"></div>
   <div id="panel"></div>
 </main>
 
@@ -1158,6 +1158,28 @@ function gaugeJudge(t) {
   if (t.kind === '바닥') return d > 1 && r.win >= r.base_win ? ['ok', '✅ 과거에 맞았음'] : ['no', '❌ 평소와 차이 없음'];
   return d < -1 ? ['ok', '✅ 과거에 맞았음'] : d > 1 ? ['no', '❌ 오히려 더 올랐음'] : ['no', '❌ 평소와 차이 없음'];
 }
+// 바닥 단계: 0 평소 · 1 많이 빠짐 · 2 돌아섬 확인. 과거에 맞았던(✅) 신호만 사용 → 홈과 바닥 탭이 늘 같은 결론
+const STAGE = [
+  { name: '평소', sub: '바닥 신호 없음' },
+  { name: '① 많이 빠짐', sub: '더 빠질 수도 있음' },
+  { name: '② 돌아섬 확인', sub: '나눠서 사기 시작' }];
+const STAGE_DO = [
+  '평소 구간입니다. 바닥 신호는 신경 쓰지 않아도 됩니다.',
+  '많이 빠졌지만 <b>아직 돌아서지 않았습니다.</b> 새로 사기보다 <b>기다리세요.</b> ②가 켜지면 나눠서 사기 시작합니다.',
+  '<b>돌아섬 확인 신호가 켜졌습니다.</b> 한 번에 사지 말고 <b>2~3번 나눠서</b>, 손절선을 먼저 정하고 사세요.'];
+function bottomStage(m, VX) {
+  const n = VX ? { ...m.now, vix: VX.now, vix_max10: VX.max10 } : { ...m.now };
+  const T = Object.fromEntries(m.tests.map(t => [t.id, t]));
+  const ok = id => T[id] && gaugeJudge(T[id])[0] === 'ok';
+  const s1 = [{ id: 'gap_lo', on: n.gap != null && n.gap <= -10 }, { id: 'dd20', on: n.dd != null && n.dd <= -20 }].filter(x => ok(x.id));
+  const s2 = ['vix_turn', 'br_up'].filter(ok).map(id => ({ id, on: !!T[id].active }));
+  const tops = [{ id: 'gap_hi', on: n.gap != null && n.gap >= 15 }, { id: 'vix_calm', on: n.vix != null && n.vix < 13 },
+                { id: 'br_dn', on: !!(T.br_dn && T.br_dn.active) }].filter(x => ok(x.id));
+  const stage = s2.some(x => x.on) ? 2 : s1.some(x => x.on) ? 1 : 0;
+  return { n, T, s1, s2, tops, stage, hot: tops.some(x => x.on) };
+}
+const stageBar = st => `<ol class="bsteps">${STAGE.map((x, i) =>
+  `<li class="${i < st ? 'past' : i === st ? 'cur s' + i : ''}">${x.name}<small>${x.sub}</small></li>`).join('')}</ol>`;
 async function renderGauge() {
   let g;
   try { g = await getJSON('data/market_gauge.json'); }
@@ -1167,27 +1189,39 @@ async function renderGauge() {
   const m = g.markets.find(x => x.id === state.gm);
   let usT = null; try { usT = await getJSON('data/us_trend.json'); } catch {}
   const VX = vixLatest(usT);
-  const n = VX ? { ...m.now, vix: VX.now, vix_max10: VX.max10 } : m.now, T = Object.fromEntries(m.tests.map(t => [t.id, t]));
-  // 과거 성적 판정 (60일 뒤 기준): 바닥 신호는 평소보다 확실히 높아야, 고점 신호는 확실히 낮아야 쓸모 있음
+  const B = bottomStage(m, VX), n = B.n, T = B.T;
   const judge = gaugeJudge;
   const J = t => { const [c, txt] = judge(t); return `<span class="jd ${c}">${txt}</span>`; };
   const fmt = v => v == null ? '-' : (v > 0 ? '+' : '') + v + '%';
-  const row = (on, title, now, need, t) => `<div class="gstep ${on ? 'on' : ''}"><div class="gck">${on ? '●' : '○'}</div>
-    <div><div class="gtl">${title} ${J(t)}</div><div class="gnow">지금: <b>${now}</b> · <span class="tag">${need}</span></div></div></div>`;
-  const s1 = [row(n.gap != null && n.gap <= -10, '지수가 120일선보다 10% 이상 아래', fmt(n.gap), '−10% 이하면 충족', T.gap_lo),
-              row(n.dd != null && n.dd <= -20, '1년 최고가보다 20% 이상 하락', fmt(n.dd), '−20% 이하면 충족', T.dd20)];
-  const vixNow = n.vix_max10 >= 30 ? `${n.vix} (10일 최고 ${n.vix_max10}, 최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%)` : `${n.vix ?? '-'} (10일 최고 ${n.vix_max10 ?? '-'})`;
-  const s2 = [row(T.vix_turn && T.vix_turn.active, 'VIX 공포지수가 30 넘게 치솟았다가 20% 이상 꺾임', vixNow, '30 돌파 → 최고점 대비 −20%', T.vix_turn),
-              T.br_up ? row(T.br_up.active, '체온계가 10% 이하에서 20%까지 회복', `${n.breadth}% (10일 최저 ${n.br_min10}%)`, '10% 이하 → 20% 이상', T.br_up) : ''];
-  const tops = [['gap_hi', n.gap != null && n.gap >= 15, '지수가 120일선보다 15% 이상 위 (과열)', fmt(n.gap), '+15% 이상이면 경고'],
-                ['vix_calm', n.vix != null && n.vix < 13, 'VIX 13 아래 (모두가 방심)', String(n.vix ?? '-'), '13 미만이면 경고'],
-                ['br_dn', T.br_dn && T.br_dn.active, '체온계 70% 이상에서 50% 아래로 꺾임', `${n.breadth ?? '-'}%`, '70% → 50% 아래']]
-    .filter(([id]) => T[id]);
-  const topOk = tops.filter(([id]) => judge(T[id])[0] === 'ok');
-  const n1 = s1.filter(x => x.includes('gstep on')).length, n2 = s2.filter(x => x.includes('gstep on')).length;
-  const summary = n2 ? `<b class="gok">② 바닥 확인 신호가 켜졌습니다.</b> 매도가 끝나고 돌아섰다는 신호입니다. 그래도 나눠서 사고, 손절선을 먼저 정하세요.`
-    : n1 ? `<b>①은 해당, ②는 아직</b> → 많이 빠졌지만 돌아선 확인은 없음. ②를 기다리세요.`
-    : `바닥권도, 바닥 확인도 아닙니다. 평소 구간입니다.`;
+  const ck = (y, txt, sub) => `<li><span class="ck ${y ? 'y' : 'n'}">${y ? '✓' : '✗'}</span><div>${txt}${sub ? `<span class="tag">${sub}</span>` : ''}</div></li>`;
+  const past = id => { const r = T[id].h['60']; return `과거 ${m.from.slice(0, 4)}년 이후 ${r.n}번: 60일 뒤 평균 ${fmt(r.avg)} (평소 ${fmt(r.base)})`; };
+  // ② 돌아섬 확인: 켜지려면 무엇이 남았는지 체크리스트로
+  const s2html = B.s2.length ? B.s2.map(x => {
+    if (x.id === 'vix_turn') {
+      const peak = n.vix_max10, over = peak != null && peak >= 30, drop = over && n.vix != null ? Math.round((n.vix / peak - 1) * 100) : null;
+      return `<li style="display:block;border:0;padding:4px 0 0"><b>VIX 공포지수</b> <span class="tag" style="display:inline">${past(x.id)}</span></li>
+        ${ck(over, `30을 넘게 치솟았나? — 최근 10일 최고 <b>${peak ?? '-'}</b>, 지금 <b>${n.vix ?? '-'}</b>`, over ? '' : '30을 넘었다가 최고점에서 20% 꺾이면 켜집니다')}
+        ${over ? ck(x.on || (drop != null && drop <= -20), `최고점에서 20% 이상 내려왔나? — 지금 <b>${n.vix ?? '-'}</b> (최고 대비 ${drop ?? '-'}%)`, '−20%가 되면 켜짐') : ''}`;
+    }
+    return `<li style="display:block;border:0;padding:4px 0 0"><b>체온계</b> <span class="tag" style="display:inline">${past(x.id)}</span></li>
+      ${ck(n.br_min10 != null && n.br_min10 <= 10, `10% 이하로 내려갔나? — 최근 10일 최저 <b>${n.br_min10 ?? '-'}%</b>`)}
+      ${ck(x.on, `20% 이상으로 회복했나? — 지금 <b>${n.breadth ?? '-'}%</b>`)}`;
+  }).join('') : `<li>이 시장에서는 과거에 맞았던 ‘돌아섬’ 신호가 없습니다.</li>`;
+  const S1 = { gap_lo: ['120일 평균선보다 10% 이상 아래', fmt(n.gap)], dd20: ['1년 최고가보다 20% 이상 하락', fmt(n.dd)] };
+  const s1html = B.s1.length ? B.s1.map(x => ck(x.on, `${S1[x.id][0]} — 지금 <b>${S1[x.id][1]}</b>`, past(x.id))).join('')
+    : `<li>이 시장에서는 과거에 맞았던 ‘많이 빠짐’ 신호가 없습니다.</li>`;
+  // 고점 경고: 신호마다 '켜지려면 얼마나 남았나'를 거리로 보여줌
+  const pastT = id => { const r = T[id].h['60']; return `과거 ${r.n}번: 60일 뒤 평균 ${fmt(r.avg)} (평소 ${fmt(r.base)}) → 평소보다 덜 올랐음`; };
+  const ckT = (y, txt, sub) => `<li><span class="ck ${y ? 't' : 'n'}">${y ? '🔥' : '✗'}</span><div>${txt}${sub ? `<span class="tag">${sub}</span>` : ''}</div></li>`;
+  const left = (v, d, goal) => v == null ? '' : `<span class="tdist">${d > 0 ? `${goal}까지 ${Math.round(d * 10) / 10} 남음` : '도달'}</span>`;
+  const topRow = x => x.id === 'gap_hi' ? ckT(x.on, `지수가 120일 평균선보다 <b>+15%</b> 넘게 위 — 지금 <b>${fmt(n.gap)}</b>${left(n.gap, 15 - n.gap, '+15%')}`, pastT(x.id))
+    : x.id === 'vix_calm' ? ckT(x.on, `VIX 공포지수가 <b>13</b> 아래 (모두가 방심) — 지금 <b>${n.vix ?? '-'}</b>${left(n.vix, n.vix - 13, '13')}`, pastT(x.id))
+    : ckT(x.on, `체온계가 70% 이상에서 <b>50%</b> 아래로 꺾임 — 지금 <b>${n.breadth ?? '-'}%</b>`, pastT(x.id));
+  const topList = B.tops.length ? B.tops.map(topRow).join('') : '<li>이 시장에서는 과거에 맞았던 고점 신호가 없습니다.</li>';
+  const topDo = B.hot ? '<b>과열 경고가 켜졌습니다.</b> 새로 사는 것은 <b>줄이고</b>, 수익 난 종목은 <b>일부 정리</b>하거나 손절선을 올려 두세요.'
+    : '지금은 과열이 아닙니다. <b>고점 걱정은 하지 않아도 됩니다.</b> 아래 거리가 0에 가까워지면 조심하세요.';
+  const hiddenT = m.tests.filter(t => t.kind === '고점' && judge(t)[0] !== 'ok').map(t => t.id === 'gap_hi' ? '120일선 +15%' : t.id === 'vix_calm' ? 'VIX 13 아래' : '체온계 꺾임');
+  const hidden = m.tests.filter(t => t.kind === '바닥' && judge(t)[0] !== 'ok').map(t => t.id === 'br_up' ? '체온계 회복' : t.id === 'dd20' ? '1년 최고가 대비 하락' : t.id === 'gap_lo' ? '120일선 대비 하락' : 'VIX 꺾임');
   const useful = new Set(m.tests.filter(t => judge(t)[0] === 'ok').map(t => t.id));
   const cell = (r, wide) => r && r.n ? `<td class="num${wide ? '' : ' y1'}">${r.avg > 0 ? '+' : ''}${r.avg}%<br><span class="tag">상승 ${r.win}% · ${r.n}번</span></td>` : `<td class="num tag${wide ? '' : ' y1'}">사례 없음</td>`;
   const base = m.tests[0].h;
@@ -1200,15 +1234,19 @@ async function renderGauge() {
       <div class="note">${m.name} ${m.to.slice(5).replace('-', '/')} 종가 <b>${m.last.toLocaleString()}</b></div>
     </div>
     <section>
-      <div class="sec-head"><h2>🌡️ 지금 ${m.name}은 어디쯤?</h2></div>
-      <div class="note" style="margin:4px 0 10px">${summary}</div>
-      <div class="gsec bot"><div class="gh">① 많이 빠졌나? <span class="tag">싸졌지만 더 빠질 수 있음</span></div>${s1.join('')}</div>
-      <div class="gsec bot2"><div class="gh">② 돌아섰나? <span class="tag">실제로 움직일 신호</span></div>${s2.join('')}</div>
-      <div class="gsec top"><div class="gh">③ 너무 올랐나? <span class="tag">고점 경고</span></div>
-        ${topOk.length ? topOk.map(([id, on, title, now, need]) => row(on, title, now, need, T[id])).join('') : `<div class="gnow" style="padding:6px 2px">이 시장에서는 과거에 맞았던 고점 신호가 없었습니다.</div>`}
-        ${tops.length > topOk.length ? `<div class="tag" style="margin-top:4px;font-size:12px;display:block">과거에 맞지 않았던 고점 신호는 숨겼습니다</div>` : ''}
-      </div>
-      <div class="one">● 지금 해당 · ○ 아님 · ✅/❌ 과거 ${m.from.slice(0, 4)}년 이후 실제로 맞았는지</div>
+      <div class="sec-head"><h2>🌡️ 지금 ${m.name}은 바닥 몇 단계?</h2></div>
+      ${stageBar(B.stage)}
+      <div class="bdo">👉 ${STAGE_DO[B.stage]}</div>
+      <div class="bbox"><h3>② 돌아섬 확인 — 켜지려면?</h3><ul class="bchk">${s2html}</ul></div>
+      <div class="bbox"><h3>① 많이 빠졌나? ${B.s1.some(x => x.on) ? '<span style="color:var(--top)">— 예</span>' : '— 아니오'}</h3><ul class="bchk">${s1html}</ul></div>
+      <div class="one" style="margin-top:12px">✓ 해당 · ✗ 아직 · 과거 ${m.from.slice(0, 4)}년 이후 실제로 맞았던 신호만 씁니다${hidden.length ? ` (맞지 않던 ${hidden.join('·')}는 뺌)` : ''}. VIX는 ${VX ? VX.date.slice(5).replace('-', '/') : m.to.slice(5).replace('-', '/')} 미국 종가 기준.</div>
+    </section>
+    <section>
+      <div class="sec-head"><h2>🔥 지금 ${m.name}은 과열?</h2></div>
+      <div class="tstat ${B.hot ? 'on' : ''}">${B.hot ? '🔥 과열 경고 켜짐' : '🙂 과열 아님'}</div>
+      <div class="bdo">👉 ${topDo}</div>
+      <div class="bbox"><h3>고점 경고 — 켜지려면?</h3><ul class="bchk">${topList}</ul></div>
+      <div class="one" style="margin-top:12px">🔥 해당 · ✗ 아직 · 하나라도 🔥이면 과열 경고${hiddenT.length ? ` · 과거에 맞지 않던 ${hiddenT.join('·')}는 뺌` : ''}</div>
     </section>
     <section>
       <div class="sec-head"><h2>📈 ${m.name} 지수와 과거 신호</h2><span class="count">주간 종가 · 로그 눈금</span></div>
@@ -1478,35 +1516,6 @@ function vixLatest(us) {
   }
   return null;
 }
-// ---------------------------------------------------------- ✅ 바닥 확인 신호 배너 (모든 탭 맨 위)
-// '많이 빠졌다'가 아니라 '매도가 끝나고 돌아섰다'를 확인하는 두 신호: VIX 급등 후 꺾임, 체온계 회복
-async function renderConfirm() {
-  const el = document.getElementById('confirm'); if (!el) return;
-  let g; try { g = await getJSON('data/market_gauge.json'); } catch { el.innerHTML = ''; return; }
-  let usT = null; try { usT = await getJSON('data/us_trend.json'); } catch {}
-  const VX = vixLatest(usT);
-  const k = g.markets.find(m => m.id === 'KOSPI') || g.markets[0];
-  const lastEv = (m, id) => { const e = m.events.filter(x => x.id === id).pop(); return e ? e.date : null; };
-  const on = [];
-  g.markets.forEach(m => m.tests.forEach(t => { if ((t.id === 'vix_turn' || t.id === 'br_up') && t.active && gaugeJudge(t)[0] === 'ok')
-    on.push({ m: m.name, id: t.id, name: t.name, date: lastEv(m, t.id) }); }));
-  const vixOn = on.some(x => x.id === 'vix_turn');
-  const uniq = on.filter((x, i) => x.id !== 'vix_turn' || on.findIndex(y => y.id === 'vix_turn') === i);
-  const n = VX ? { ...k.now, vix: VX.now, vix_max10: VX.max10 } : k.now;
-  const vixProg = n.vix == null ? '' : n.vix_max10 >= 30
-    ? `VIX 최근 10일 최고 <b>${n.vix_max10}</b> → 지금 <b>${n.vix}</b> (최고 대비 ${Math.round((n.vix / n.vix_max10 - 1) * 100)}%, <b>−20%</b>가 되면 켜짐)`
-    : `VIX 지금 <b>${n.vix}</b> · 최근 10일 최고 ${n.vix_max10} (<b>30</b>을 넘었다가 20% 꺾이면 켜짐)`;
-  const brProg = g.markets.filter(m => m.now.breadth != null && gaugeJudge(m.tests.find(t => t.id === 'br_up'))[0] === 'ok').map(m =>
-    `${m.name} 체온계 <b>${m.now.breadth}%</b>${m.now.br_min10 <= 10 ? ` (최근 10일 최저 ${m.now.br_min10}% → <b>20%</b> 회복 시 켜짐)` : ' (10% 이하로 내려갔다가 20% 회복 시 켜짐)'}`).join(' · ');
-  el.innerHTML = uniq.length
-    ? `<div class="confirm on" data-go="gauge"><b>✅ 바닥 확인 신호가 켜졌습니다</b>
-        ${uniq.map(x => `<span class="cf">${x.id === 'vix_turn' ? 'VIX 급등 후 꺾임' : x.m + ' 체온계 회복'}${x.date ? ` (${x.date.slice(5).replace('-', '/')})` : ''}</span>`).join('')}
-        <div class="cfn">‘매도가 끝나고 돌아섰다’는 확인 신호입니다. 그래도 한 번에 사지 말고 나눠서, 손절선을 먼저 정하세요. 과거 성적은 🌡️ 바닥·고점 탭에서 확인하세요.</div></div>`
-    : `<div class="confirm" data-go="gauge"><b>⏳ 바닥 확인 신호 대기 중</b> <span class="tag">(VIX는 ${VX ? VX.date.slice(5).replace('-', '/') : k.to.slice(5)} 미국 종가 기준)</span>
-        <div class="cfn">${vixProg}${vixProg && brProg ? '<br>' : ''}${brProg}</div></div>`;
-  el.querySelector('.confirm').onclick = () => { if (state.tab !== 'gauge') { state.tab = 'gauge'; location.hash = 'gauge'; render(); } };
-}
-
 // 🌙 코스피200 야간선물: 실시간이 중요해서 숫자를 저장하지 않고 실시간 시세 화면으로 연결
 // (한국거래소 야간시장: 평일 18:00 ~ 다음 날 06:00, 미국 서머타임 기간은 05:00 종료)
 function nightBar() {
@@ -1538,9 +1547,8 @@ async function renderHome() {
   const ok = id => T[id] && gaugeJudge(T[id])[0] === 'ok';
   const br = Object.entries(ix).map(([k, v]) => { const b = v.meta.breadth; const sh = b && b.short; return { k, name: INDEX[k].name, now: sh ? sh[sh.length - 1] : null, d5: sh && sh.length > 5 ? sh[sh.length - 1] - sh[sh.length - 6] : null }; });
   const cold = br.some(b => b.now != null && b.now <= 20);
-  const stage1 = K && ((K.now.gap != null && K.now.gap <= -10) || (K.now.dd != null && K.now.dd <= -20));
-  const stage2 = ok('vix_turn') && T.vix_turn.active;
-  const hot = ['gap_hi', 'vix_calm', 'br_dn'].some(id => ok(id) && T[id].active);
+  const BS = K ? bottomStage(K, vixLatest(us)) : null;
+  const stage1 = BS && BS.stage === 1, stage2 = BS && BS.stage === 2, hot = BS && BS.hot;
   let cls, head, advice;
   if (stage2) { cls = 'good'; head = '✅ 바닥 확인 신호가 켜졌습니다'; advice = '매도가 끝나고 돌아섰다는 신호입니다. <b>나눠서</b> 사는 것을 검토할 수 있는 구간입니다. 사기 전에 손절선부터 정하세요.'; }
   else if (stage1 || cold) { cls = 'cold'; head = '🧊 지금은 관찰 구간입니다'; advice = '시장이 많이 빠져 있지만, 돌아섰다는 확인은 아직 없습니다. <b>새로 사기보다 지켜보고</b>, 가진 종목은 손절선을 점검할 때입니다.'; }
@@ -1580,13 +1588,6 @@ async function renderHome() {
     VX ? gauge({ name: 'VIX 공포지수', v: VX.now, min: 10, max: 45, zones: [[30, 45, 'cold'], [10, 13, 'hot']], marks: [[13, '13'], [30, '30']], ghost: VX.max10,
       val: VX.now, note: `어젯밤 미국 · 최근 10일 최고 ${VX.max10}` }) : '',
   ].join('');
-  // 바닥 확인 신호 2개: 켜졌는지, 과거에도 맞았는지
-  const lamp = (label, list) => {
-    const st = list.length ? (list.some(t => t.active && gaugeJudge(t)[0] === 'ok') ? 'on' : list.some(t => t.active) ? 'weak' : 'off') : 'off';
-    return `<li class="lamp ${st}"><i></i>${label}<span>${st === 'on' ? '켜짐' : st === 'weak' ? '켜짐 · 과거엔 효과 없음' : '꺼짐'}</span></li>`;
-  };
-  const tests = id => g ? g.markets.map(m => m.tests.find(t => t.id === id)).filter(Boolean) : [];
-  const lamps = g ? `<ul class="lamps">${lamp('VIX 급등 후 꺾임', tests('vix_turn').slice(0, 1))}${lamp('체온계 10% → 20% 회복', tests('br_up'))}</ul>` : '';
   // 3) 오늘 신호: 종목명을 바로 보여주고 누르면 차트
   const chipList = (k, arr, cls) => arr.length
     ? arr.map(x => `<button class="sn ${cls}" data-ix="${k}" data-code="${x.code}">${esc(x.name)}${x.g && cls === 'up' ? `<small>${x.g}</small>` : ''}</button>`).join('')
@@ -1619,7 +1620,7 @@ async function renderHome() {
     ${nightBar()}
     <section class="cockpit ${cls}">
       <div class="verdict"><div class="hh">${head}</div><div class="ha">${advice}</div>
-        <div class="lamph">바닥 확인 신호</div>${lamps}
+        ${BS ? `<div class="lamph">코스피 바닥 단계</div>${stageBar(BS.stage)}` : ''}
         <button class="lnk" data-go="gauge">바닥·고점 근거 보기</button></div>
       <div class="gauges">${gauges}</div>
     </section>
@@ -1637,7 +1638,6 @@ async function renderHome() {
 async function render() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  if (state.tab === 'gauge') renderConfirm(); else document.getElementById('confirm').innerHTML = '';
   try {
     if (INDEX[state.tab]) await renderAlignment(state.tab);
     else if (state.tab === 'sector') await renderSector();
