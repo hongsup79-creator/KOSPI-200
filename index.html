@@ -242,6 +242,14 @@
   .bchk li:first-child { border-top: 0; }
   .bchk .ck { flex: 0 0 22px; font-weight: 800; text-align: center; }
   .bchk .ck.y { color: var(--bot); } .bchk .ck.n { color: var(--muted); } .bchk .ck.t { color: var(--top); }
+  .egg { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 14px; align-items: center; }
+  @media (max-width: 640px) { .egg { grid-template-columns: 1fr; } }
+  .egg svg { width: 100%; max-width: 300px; height: auto; margin: 0 auto; display: block; }
+  .egg-now { font-size: 20px; font-weight: 800; line-height: 1.3; }
+  .egg-now small { display: block; font-size: 14px; font-weight: 500; color: var(--muted); margin-top: 4px; }
+  .egg-path { font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+  .egg-t td, .egg-t th { padding: 5px 6px; font-size: 13px; }
+  .egg-t tr.cur td { background: var(--sunk); font-weight: 800; }
   .tstat { display: inline-block; font-weight: 800; font-size: 17px; padding: 6px 14px; border-radius: 999px; background: var(--sunk); margin: 4px 0 2px; }
   .tstat.on { background: var(--top); color: #fff; }
   .tdist { display: inline-block; font-size: 12px; font-weight: 700; color: var(--muted); background: var(--sunk); border-radius: 6px; padding: 0 6px; margin-left: 4px; }
@@ -1180,6 +1188,50 @@ function bottomStage(m, VX) {
 }
 const stageBar = st => `<ol class="bsteps">${STAGE.map((x, i) =>
   `<li class="${i < st ? 'past' : i === st ? 'cur s' + i : ''}">${x.name}<small>${x.sub}</small></li>`).join('')}</ol>`;
+// 🥚 코스톨라니 달걀 6단계 — 원래는 금리·투자 심리로 나누지만, 여기선 지수 가격만으로 근사
+// 주간 종가 vs 26주(≈120일) 평균선: 위/아래, 평균선 방향(4주 전보다 오르나), 거리(+15% 과열, −10% 공포)
+const EGG = {
+  A1: { k: '회복기', n: '상승 1단계', d: '바닥을 지나 평균선 위로 올라옴 (평균선은 아직 내려가는 중)' , do: '나눠서 사기 시작. 정배열로 막 바뀌는 종목 위주로, 손절선부터 정하기' },
+  A2: { k: '상승기', n: '상승 2단계', d: '평균선 위 + 평균선도 올라가는 중' , do: '가진 종목은 들고 가기. ▲상승 초입 종목 위주로 사고, 손절선은 지키기' },
+  A3: { k: '과열기', n: '상승 3단계', d: '평균선보다 15% 넘게 위' , do: '서둘러 팔 필요는 없음(과거엔 더 오른 경우가 많음). 새로 살 땐 조금만, 손절선을 올려 이익 지키기' },
+  B1: { k: '하락 초입', n: '하락 1단계', d: '평균선 아래로 내려옴 (평균선은 아직 올라가는 중)' , do: '가장 조심할 때. 새로 사지 말고, 손절선 깨진 종목은 정리해 현금 늘리기' },
+  B2: { k: '하락기', n: '하락 2단계', d: '평균선 아래 + 평균선도 내려가는 중' , do: '지켜보기. 새로 사지 말고 현금 유지, 남은 종목은 손절선 점검' },
+  B3: { k: '공포기', n: '하락 3단계', d: '평균선보다 10% 넘게 아래 (투매)' , do: '겁먹고 따라 팔지 않기. 사려면 ‘② 돌아섬 확인’이 켜진 뒤 2~3번 나눠서' }};
+const EGG_ORDER = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'];
+function eggPhases(W) {
+  const c = W.close, L = c.length, ph = new Array(L).fill(null), ma = new Array(L).fill(null);
+  for (let i = 25; i < L; i++) { let s = 0, ok = true; for (let j = i - 25; j <= i; j++) { if (c[j] == null) { ok = false; break; } s += c[j]; } if (ok) ma[i] = s / 26; }
+  for (let i = 29; i < L; i++) {
+    if (ma[i] == null || ma[i - 4] == null || c[i] == null) continue;
+    const G = (c[i] / ma[i] - 1) * 100, S = ma[i] / ma[i - 4] - 1;
+    ph[i] = G >= 0 ? (G >= 15 ? 'A3' : S > 0 ? 'A2' : 'A1') : (G <= -10 ? 'B3' : S > 0 ? 'B1' : 'B2');
+  }
+  // 과거 성적: 그 단계였던 주에 샀다면 13주(약 3개월) 뒤
+  const st = {}, all = [];
+  for (let i = 0; i + 13 < L; i++) { if (!ph[i] || c[i + 13] == null) continue; const f = (c[i + 13] / c[i] - 1) * 100; (st[ph[i]] = st[ph[i]] || []).push(f); all.push(f); }
+  const sum = a => a && a.length ? { n: a.length, avg: Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10, win: Math.round(a.filter(x => x > 0).length / a.length * 100) } : null;
+  const stats = Object.fromEntries(EGG_ORDER.map(k => [k, sum(st[k])]));
+  let last = L - 1; while (last > 0 && !ph[last]) last--;
+  // 최근 1년 단계 변화 (2주 이상 이어진 것만)
+  const runs = []; for (let i = Math.max(30, L - 52); i <= last; i++) { if (!ph[i]) continue; if (!runs.length || runs[runs.length - 1].p !== ph[i]) runs.push({ p: ph[i], d: W.dates[i], n: 1 }); else runs[runs.length - 1].n++; }
+  const path = runs.filter((r, i) => r.n >= 2 || i === runs.length - 1).filter((r, i, a) => !i || a[i - 1].p !== r.p);
+  return { now: ph[last], ph, stats, base: sum(all), path };
+}
+function eggSvg(now) {
+  const cx = 160, cy = 112, rx = 88, ry = 80, P = { A3: 35, A2: 90, A1: 145, B3: 215, B2: 270, B1: 325 };
+  const pt = (deg, k) => [cx + rx * k * Math.sin(deg * Math.PI / 180), cy - ry * k * Math.cos(deg * Math.PI / 180)];
+  const dots = EGG_ORDER.map(id => { const [x, y] = pt(P[id], 1), [lx, ly] = pt(P[id], P[id] % 180 === 90 ? 1.14 : 1.3), on = id === now, col = id[0] === 'A' ? 'var(--up)' : 'var(--dn)';
+    return `${on ? `<circle cx="${x}" cy="${y}" r="15" fill="none" stroke="${col}" stroke-width="3" opacity=".35"/>` : ''}
+      <circle cx="${x}" cy="${y}" r="${on ? 10 : 6}" fill="${on ? col : 'var(--panel)'}" stroke="${col}" stroke-width="2.5"/>
+      <text x="${lx}" y="${ly + 4}" text-anchor="${P[id] === 90 ? 'start' : P[id] === 270 ? 'end' : 'middle'}" font-size="${on ? 14 : 12}" font-weight="${on ? 800 : 600}" fill="${on ? 'var(--text)' : 'var(--muted)'}">${id} ${EGG[id].k}</text>`; }).join('');
+  return `<svg viewBox="0 0 320 230" role="img" aria-label="코스톨라니 달걀 — 지금 ${now ? EGG[now].k : ''}">
+    <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-dasharray="5 5"/>
+    <text x="${cx + 34}" y="${cy + 4}" text-anchor="middle" font-size="12" fill="var(--up)">▲ 오르는 길</text>
+    <text x="${cx - 34}" y="${cy + 4}" text-anchor="middle" font-size="12" fill="var(--dn)">▼ 내리는 길</text>
+    <text x="${cx}" y="${cy - ry + 18}" text-anchor="middle" font-size="11" fill="var(--muted)">꼭대기</text>
+    <text x="${cx}" y="${cy + ry - 10}" text-anchor="middle" font-size="11" fill="var(--muted)">바닥</text>
+    ${dots}</svg>`;
+}
 async function renderGauge() {
   let g;
   try { g = await getJSON('data/market_gauge.json'); }
@@ -1233,6 +1285,23 @@ async function renderGauge() {
       <div class="seg" id="gm">${g.markets.map(x => `<button data-k="${x.id}" class="${x.id === m.id ? 'on' : ''}">${x.name}</button>`).join('')}</div>
       <div class="note">${m.name} ${m.to.slice(5).replace('-', '/')} 종가 <b>${m.last.toLocaleString()}</b></div>
     </div>
+    ${(() => { const E = eggPhases(m.weekly); if (!E.now) return ''; const cur = EGG[E.now], b = E.base;
+      const rows = EGG_ORDER.filter(k => E.stats[k]);
+      const worst = rows.slice().sort((a, b2) => E.stats[a].avg - E.stats[b2].avg)[0];
+      return `<section>
+      <div class="sec-head"><h2>🥚 코스톨라니 달걀 — 지금 ${m.name}은?</h2></div>
+      <div class="egg">${eggSvg(E.now)}
+        <div><div class="egg-now" style="color:var(${E.now[0] === 'A' ? '--up' : '--dn'})">${cur.n} · ${cur.k}<small>${cur.d}</small></div>
+          <div class="bdo" style="margin:8px 0 0">👉 <b>이 시기 할 일:</b> ${cur.do}</div>
+          <div class="egg-path"><b>최근 1년 흐름</b><br>${E.path.map(r => `${r.d.slice(2, 7).replace('-', '/')} ${EGG[r.p].k}`).join(' → ')}</div></div></div>
+      <div class="one" style="margin-top:10px">과거 ${m.from.slice(0, 4)}년 이후, 각 단계였던 주에 샀다면 <b>3개월 뒤</b></div>
+      <div class="rt-wrap"><table class="sc egg-t"><thead><tr><th>단계</th><th class="num">평균</th><th class="num">오른 비율</th><th class="num">주 수</th></tr></thead><tbody>
+        ${rows.map(k => `<tr class="${k === E.now ? 'cur' : ''}"><td>${k === E.now ? '▶ ' : ''}${k} ${EGG[k].k}<br><span class="tag" style="font-weight:500;white-space:normal">${EGG[k].do}</span></td><td class="num">${pctS(E.stats[k].avg)}</td><td class="num">${E.stats[k].win}%</td><td class="num tag">${E.stats[k].n}${E.stats[k].n < 26 ? ' · 적음' : ''}</td></tr>`).join('')}
+        <tr class="base"><td>평소 (아무 주나)</td><td class="num">${pctS(b.avg)}</td><td class="num">${b.win}%</td><td class="num tag">${b.n}</td></tr>
+      </tbody></table></div>
+      <div class="note">코스톨라니는 <b>과열기에 팔고 공포기에 사라</b>고 했지만, 이 시장의 과거 결과는 위 표와 같습니다. 가장 나빴던 단계는 <b>${worst} ${EGG[worst].k}</b>(3개월 뒤 평균 ${pctS(E.stats[worst].avg)})였습니다.
+        주 수가 적은 단계(‘적음’)는 몇 번의 사례뿐이라 믿기 어렵습니다. 단계는 ‘지금 위치’를 보여줄 뿐, 다음 단계로 <b>언제</b> 넘어갈지는 알려주지 않습니다. 원래 이론은 금리·투자 심리로 나누지만, 여기서는 지수와 26주(약 120일) 평균선만으로 나눴습니다.</div>
+    </section>`; })()}
     <section>
       <div class="sec-head"><h2>🌡️ 지금 ${m.name}은 바닥 몇 단계?</h2></div>
       ${stageBar(B.stage)}
@@ -1620,6 +1689,7 @@ async function renderHome() {
     ${nightBar()}
     <section class="cockpit ${cls}">
       <div class="verdict"><div class="hh">${head}</div><div class="ha">${advice}</div>
+        ${K && K.weekly ? (() => { const E = eggPhases(K.weekly); return E.now ? `<div class="lamph">코스피 사이클 (코스톨라니 달걀)</div><div style="font-size:16px;font-weight:800;color:var(${E.now[0] === 'A' ? '--up' : '--dn'})">🥚 ${EGG[E.now].n} · ${EGG[E.now].k}</div>` : ''; })() : ''}
         ${BS ? `<div class="lamph">코스피 바닥 단계</div>${stageBar(BS.stage)}` : ''}
         <button class="lnk" data-go="gauge">바닥·고점 근거 보기</button></div>
       <div class="gauges">${gauges}</div>
